@@ -46,16 +46,16 @@ An item with `category_id IS NULL` is displayed as "Categoria indefinida" (front
 | Column | Type | Notes |
 |---|---|---|
 | `id` | INTEGER PK | |
-| `code` | TEXT NOT NULL UNIQUE | manually typed, the identifier used for fast lookup during a sale — duplicates are rejected at the command layer before insert |
+| `code` | TEXT NOT NULL UNIQUE | the identifier used for fast lookup during a sale — duplicates are rejected at the command layer before insert. Optional in the create form: left blank, `create_item` uses the item's own `id` as the code instead (`commands::items::predict_next_item_id` + `unique_code`) — editable into a real code afterward like any other field |
 | `name` | TEXT NOT NULL | |
 | `category_id` | INTEGER NULL → `categories(id)` **SET NULL** | optional |
 | `cost_price` / `sale_price` | REAL, `CHECK (>= 0)` | money as float, rounded to 2 decimals at the command layer |
 | `quantity` | INTEGER, `CHECK (>= 0)` | current stock level — the fast-read counter; see `stock_movements` for the "why" behind each change |
 | `min_quantity` | INTEGER NULL | drives the low-stock alert (red chip when `quantity <= min_quantity`); `NULL` means the item never alerts |
-| `active` | INTEGER NOT NULL DEFAULT 1 | boolean — set by the CSV import screen's "desativar" action for items missing from the sheet |
+| `active` | INTEGER NOT NULL DEFAULT 1 | boolean — any logged-in profile can set this to `0` (`commands::items::deactivate_item`); only Admin can set it back to `1` (`update_item`). Also the eventual target of the CSV import screen's "desativar" action for items missing from the sheet (not built yet) |
 | `created_at` | TEXT | |
 
-Never hard-deleted in the common flow (only deactivated), but a true delete is allowed as an Admin-only destructive action (see `sale_items` below for how that's reconciled with sale history).
+`delete_item` (Admin-only, hard delete) is blocked by the `stock_movements.item_id` foreign key once the item has any recorded movement — in practice that means it only works for a freshly-created, never-touched item (a mistake being corrected). Retiring a real item goes through `active` instead (see `sale_items` below for how a hard-deleted item's past receipts still stay accurate).
 
 ### `stock_movements` — append-only ledger
 | Column | Type | Notes |
@@ -68,7 +68,7 @@ Never hard-deleted in the common flow (only deactivated), but a true delete is a
 | `user_id` | INTEGER NOT NULL → `users(id)` | who caused the movement |
 | `created_at` | TEXT | |
 
-Never edited or deleted. Recorded from day one even though no screen consumes it yet — it's the data source for the future stock-rupture forecast ("Tendência: acaba em ~N dias", see `Plans/PLANO.md` → "Ideias extras"). `items.quantity` is always updated in the same transaction as the matching ledger row — the ledger is the "why", the item's column is the fast "how much now".
+Never edited or deleted. Written by `commands::items` (`initial` on `create_item` when the starting quantity is `> 0`, `entry` on `add_stock_entry`, `adjustment` on `update_item` when its `quantity` field's value differs from what was stored — `sale`/`refund` arrive with the Vendas slice). `items.quantity` is always updated in the same statement/transaction as the matching ledger row — the ledger is the "why", the item's column is the fast "how much now". No consultation screen yet — it's still just the data source for the future stock-rupture forecast ("Tendência: acaba em ~N dias", see `Plans/PLANO.md` → "Ideias extras").
 
 ### `clients` — Crediário debtors
 | Column | Type | Notes |
@@ -141,4 +141,4 @@ Modeled as its own table from day one specifically so a future split-payment fea
 ```
 config(key TEXT PRIMARY KEY, value TEXT NOT NULL)
 ```
-No rows are seeded yet. Expected keys, as the corresponding features land: `backup_folder` (chosen backup destination), a low-stock warning percentage (the global "yellow chip" threshold — see `Plans/PLANO.md` → "Alerta de estoque baixo"), and whether Crediário is enabled as a payment method (`Plans/PLANO.md` → "Configurações — trava de desativação": can only be turned off while no client has an open balance).
+No rows are seeded — `commands::config`'s getters fall back to a default in code when the key is absent rather than seeding a row. Keys in use: `low_stock_warning_percent` (the global "yellow chip" threshold, defaults to `20`, see `Plans/PLANO.md` → "Alerta de estoque baixo") and `default_profit_margin_percent` (suggests `sale_price` on item creation as `cost_price * (1 + percent / 100)`, defaults to `30`; Admin-only, editable in Configurações). Expected as later features land: `backup_folder` (chosen backup destination) and whether Crediário is enabled as a payment method (`Plans/PLANO.md` → "Configurações — trava de desativação": can only be turned off while no client has an open balance).

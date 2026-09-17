@@ -13,6 +13,7 @@
   --theme-surface: #ffffff;
   --theme-raised:  #f1f3f6;
   --theme-hover:   #e3e6eb;
+  --theme-hover-strong: #d3d7de;
   --theme-border:  #e3e6eb;
   --theme-1:       #1b2130;
   --theme-2:       #4b5262;
@@ -43,6 +44,7 @@
   --theme-surface: #171821;
   --theme-raised:  #1e2029;
   --theme-hover:   #262835;
+  --theme-hover-strong: #323548;
   --theme-border:  rgba(255, 255, 255, 0.08);
   --theme-1:       #f0f0f2;
   --theme-2:       #c7c7cd;
@@ -60,6 +62,7 @@
   --color-theme-surface: var(--theme-surface);
   --color-theme-raised:  var(--theme-raised);
   --color-theme-hover:   var(--theme-hover);
+  --color-theme-hover-strong: var(--theme-hover-strong);
   --color-theme-border:  var(--theme-border);
   --color-theme-1:       var(--theme-1);
   --color-theme-2:       var(--theme-2);

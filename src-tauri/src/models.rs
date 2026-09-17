@@ -41,3 +41,26 @@ impl UserProfile {
         })
     }
 }
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CategorySummary {
+    pub id: i64,
+    pub name: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemSummary {
+    pub id: i64,
+    pub code: String,
+    pub name: String,
+    pub category_id: Option<i64>,
+    /// `None` when `category_id` is `None` — the frontend shows "Categoria indefinida".
+    pub category_name: Option<String>,
+    pub cost_price: f64,
+    pub sale_price: f64,
+    pub quantity: i64,
+    pub min_quantity: Option<i64>,
+    pub active: bool,
+}

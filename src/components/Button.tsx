@@ -6,7 +6,10 @@ const VARIANT_CLASSES: Record<Variant, string> = {
   primary: "bg-primary text-white hover:bg-primary-hover border-transparent",
   secondary: "bg-theme-surface text-theme-1 hover:bg-theme-hover border-theme-border",
   danger: "bg-danger text-white hover:brightness-90 border-transparent",
-  ghost: "bg-transparent text-theme-1 hover:bg-theme-hover border-transparent",
+  // hover mais forte que o hover-padrão de linha/card — senão some quando o
+  // botão está dentro de algo que já fica bg-theme-hover ao passar o mouse
+  // (ex.: linha de tabela), ver "Theme rule" no CLAUDE.md.
+  ghost: "bg-transparent text-theme-1 hover:bg-theme-hover-strong border-transparent",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

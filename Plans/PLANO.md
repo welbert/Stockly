@@ -366,14 +366,14 @@ Cards candidatos para o catálogo inicial do Stockly:
 ## Próximos passos sugeridos
 
 1. ~~Validar este plano com você (nomes de telas, quais ações exigem senha do admin, política de import CSV)~~ — **concluído**.
-2. Fazer o scaffold do projeto (`pnpm create tauri-app` ou copiar a base de configuração do CashVault) com nome **Stockly** e identifier `com.welbert.stockly`.
-3. Desenhar o schema inicial do SQLite (`init_db`/`migrate_db`), espelhando o padrão do CashVault.
+2. ~~Fazer o scaffold do projeto (`pnpm create tauri-app` ou copiar a base de configuração do CashVault) com nome **Stockly** e identifier `com.welbert.stockly`.~~ — **concluído**.
+3. ~~Desenhar o schema inicial do SQLite (`init_db`/`migrate_db`), espelhando o padrão do CashVault.~~ — **concluído** (ver `docs/database.md`).
 4. **Implementar em fatias verticais por feature** (decidido) — schema + comando Rust + tela, um recurso de cada vez, em vez de fechar todo o backend e só depois todo o frontend (ou vice-versa): os mockups HTML já definem a UI em detalhe e o `PLANO.md` já define as regras de negócio em detalhe, então separar as fases só adicionaria risco de integração no fim. Ordem sugerida, seguindo a dependência natural entre os recursos:
-   1. Base de auth + primeiro uso (usuários, login, bloqueio por inatividade) — tudo depende disso.
-   2. Estoque (cadastro de item, categorias) — Venda precisa de item cadastrado pra existir.
+   1. ~~Base de auth + primeiro uso (usuários, login, bloqueio por inatividade) — tudo depende disso.~~ — **concluído** (ver `CLAUDE.md` → "Current state" e `docs/commands.md`).
+   2. ~~Estoque (cadastro de item, categorias) — Venda precisa de item cadastrado pra existir.~~ — **concluído**, exceto Importar/Exportar CSV (fica no item 6, "funcionalidades de apoio") — ver `CLAUDE.md` → "Current state" e `docs/commands.md`.
    3. Venda (PDV) + recibo PDF — o coração do app.
    4. Crediário e Devedores — depende de Venda já funcionando (forma de pagamento).
    5. Dashboard e Relatórios — depende de ter dado de venda acumulado pra mostrar algo.
    6. Backup, autoupdate, CSV — funcionalidades de apoio, não bloqueiam nada acima.
-5. Criar a documentação técnica em `docs/` (architecture, database, commands, frontend) conforme o projeto avança.
+5. Criar a documentação técnica em `docs/` (architecture, database, commands, frontend) conforme o projeto avança — em andamento: `database.md` e `commands.md` já existem; `architecture.md`/`frontend.md` ficam para quando essas camadas crescerem o suficiente.
 6. Decidir se o repositório do Stockly será **público** (necessário para o autoupdate single-repo funcionar) ou se vai precisar do esquema de repositório de releases separado — ver seção "Autoupdate".

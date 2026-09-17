@@ -1,5 +1,6 @@
 mod commands;
 mod db;
+mod guard;
 mod models;
 
 use rusqlite::Connection;
@@ -47,6 +48,20 @@ pub fn run() {
             commands::auth::logout,
             commands::auth::get_active_user,
             commands::auth::verify_password,
+            commands::categories::list_categories,
+            commands::categories::create_category,
+            commands::categories::rename_category,
+            commands::categories::delete_category,
+            commands::items::list_items,
+            commands::items::create_item,
+            commands::items::update_item,
+            commands::items::delete_item,
+            commands::items::add_stock_entry,
+            commands::items::deactivate_item,
+            commands::config::get_low_stock_percent,
+            commands::config::set_low_stock_percent,
+            commands::config::get_default_profit_margin,
+            commands::config::set_default_profit_margin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

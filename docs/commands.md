@@ -5,7 +5,7 @@ Typed wrapper on the frontend: `src/lib/api.ts` — no component calls `invoke()
 
 Arguments are passed in camelCase on the JS side and automatically converted to snake_case for the Rust parameters (Tauri v2 default behavior) — the names below are already in Rust format.
 
-Every mutation that isn't self-service (`update_theme`, `update_my_auto_lock`) re-checks `AppState.active_user_id` against `users.is_admin` on the backend itself (`require_admin`, in `commands/users.rs`) — the frontend hiding a button is not the real access control.
+Every mutation that isn't self-service (`update_theme`, `update_my_auto_lock`, `add_stock_entry`, `deactivate_item`) re-checks `AppState.active_user_id` against `users.is_admin` on the backend itself (`require_admin`, in `src-tauri/src/guard.rs` — shared across command modules) — the frontend hiding a button is not the real access control.
 
 ## Auth / session (`commands/auth.rs`)
 
@@ -28,6 +28,35 @@ Every mutation that isn't self-service (`update_theme`, `update_my_auto_lock`) r
 | `delete_user` | `(id) -> ()` | admin-only, hard delete. Refuses to delete your own logged-in row, same reasoning as above. Also refuses to delete the last active Admin. Fails with a foreign-key error if the user has sales/stock movements/credit payments on record (no cascade there by design) |
 | `update_theme` | `(theme) -> ()` | self-service — always writes to whichever user is in `AppState.active_user_id`, never a `user_id` argument |
 | `update_my_auto_lock` | `(auto_lock_minutes) -> UserProfile` | self-service equivalent of `update_user`'s `auto_lock_minutes` field — any logged-in profile (not just Admin) can change its own idle-lock timeout |
+
+## Categories (`commands/categories.rs`)
+
+| Command | Signature | Notes |
+|---|---|---|
+| `list_categories` | `() -> Vec<CategorySummary>` | any logged-in profile |
+| `create_category` | `(name) -> CategorySummary` | admin-only, friendly error on a duplicate name (`categories.name` is also `UNIQUE` at the DB level as a backstop) |
+| `rename_category` | `(id, name) -> CategorySummary` | admin-only, same duplicate check excluding `id` itself |
+| `delete_category` | `(id) -> ()` | admin-only. `items.category_id` is `ON DELETE SET NULL` — items just fall back to "Categoria indefinida", nothing else breaks |
+
+## Items (`commands/items.rs`)
+
+| Command | Signature | Notes |
+|---|---|---|
+| `list_items` | `() -> Vec<ItemSummary>` | any logged-in profile; `categoryName` is `null` when uncategorized (LEFT JOIN) |
+| `create_item` | `(code, name, category_id, cost_price, sale_price, quantity, min_quantity) -> ItemSummary` | admin-only. `code` is optional — blank/whitespace-only means "use this item's own id" (`predict_next_item_id` + `unique_code`, since the id doesn't exist until after insert). Friendly error on a duplicate explicit `code`. Prices rounded to 2 decimals (`round2`). Writes an `initial` `stock_movements` row when `quantity > 0` |
+| `update_item` | `(id, code, name, category_id, cost_price, sale_price, quantity, min_quantity, active) -> ItemSummary` | admin-only, full edit **including** `quantity` directly — this is PLANO.md's Admin-only "ajuste de inventário"; the delta (positive or negative) is logged as an `adjustment` row. Also where `active` gets flipped back to `true` (reactivating is Admin-only) |
+| `delete_item` | `(id) -> ()` | admin-only, hard delete. Fails (friendly message) on a foreign-key violation once the item has any `stock_movements`/`sale_items` history — deliberately: it's for correcting a fresh mistake, not retiring a real item |
+| `add_stock_entry` | `(item_id, quantity) -> ItemSummary` | any logged-in profile, `quantity` must be `> 0`. Logged as `entry` — the everyday "recebi mercadoria" action, distinct from Admin's `adjustment` |
+| `deactivate_item` | `(item_id) -> ItemSummary` | any logged-in profile (PLANO.md: Usuário comum can deactivate, only Admin can hard-delete or reactivate) |
+
+## Config (`commands/config.rs`)
+
+| Command | Signature | Notes |
+|---|---|---|
+| `get_low_stock_percent` | `() -> i64` | any logged-in profile (needed to render the yellow "Baixo" chip everywhere). Defaults to `20` (a reasonable starting buffer) if the `config` row `low_stock_warning_percent` was never set |
+| `set_low_stock_percent` | `(percent) -> ()` | admin-only (PLANO.md: shown only in the Administrador's Configurações) |
+| `get_default_profit_margin` | `() -> f64` | admin-only both ways (not just the write) — only the item creation form consumes it. Defaults to `30` (a reasonable starting markup) if the `config` row `default_profit_margin_percent` was never set |
+| `set_default_profit_margin` | `(percent) -> ()` | admin-only |
 
 ## Logging (`commands/logging.rs`)
 

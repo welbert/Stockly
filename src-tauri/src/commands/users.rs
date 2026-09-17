@@ -1,3 +1,4 @@
+use crate::guard::require_admin;
 use crate::models::{UserProfile, UserSummary, USER_PROFILE_COLUMNS};
 use crate::AppState;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -10,26 +11,6 @@ fn fetch_profile(conn: &Connection, id: i64) -> Result<UserProfile, String> {
         UserProfile::from_row,
     )
     .map_err(|e| e.to_string())
-}
-
-fn user_is_admin(conn: &Connection, id: i64) -> Result<bool, String> {
-    conn.query_row("SELECT is_admin FROM users WHERE id = ?1", params![id], |row| row.get::<_, i64>(0))
-        .map(|v| v != 0)
-        .map_err(|e| e.to_string())
-}
-
-/// Checks the AppState's active session is an admin, returning its id. Used
-/// to gate every admin-only mutation at the backend layer too, not just the UI.
-fn require_admin(state: &AppState, conn: &Connection) -> Result<i64, String> {
-    let active_id = state
-        .active_user_id
-        .lock()
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Nenhum usuário autenticado".to_string())?;
-    if !user_is_admin(conn, active_id)? {
-        return Err("Apenas administradores podem realizar esta ação".to_string());
-    }
-    Ok(active_id)
 }
 
 fn current_flags(conn: &Connection, id: i64) -> Result<(bool, bool), String> {

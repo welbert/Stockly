@@ -19,17 +19,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Never hardcode a Tailwind background/text/border color — always use the `bg-theme-*` / `text-theme-*` / `border-theme-border` / `bg-sidebar-*` tokens defined in `src/index.css`, switched via `data-theme="<id>"`. `--color-primary` (indigo, `#4f46e5`) is the one brand accent, taken from the mockups' `--primary` — components should use `primary`/`primary-hover`/`primary-soft` classes, never a hardcoded hex. The sidebar is intentionally dark regardless of theme (matches the mockups) but still goes through tokens (`--theme-sidebar-*`), not raw hex, in case a future theme ever needs to override it.
 
+`Button`'s `ghost` variant hovers with `bg-theme-hover-strong`, not the plain `bg-theme-hover` other surfaces use — it's the variant used for row actions (Editar/Excluir inside a `<tr>`, or a list item), and a table row already turns `bg-theme-hover` on its own hover, so a ghost button using that same shade becomes invisible on hover. Keep this distinction if you add another "hover inside an already-hovered container" case.
+
 **Adding a theme is 2-3 places, never more**: an entry in the `THEMES` array (`src/theme.ts` — the single source of truth for which themes exist and what `ThemeSwitcher` renders), a matching `[data-theme="<id>"]` block in `src/index.css`, and — only if it should be persisted per profile — that id added to the `CHECK` on `users.theme` (see `docs/database.md`) via a `migrate_db` entry. No component, button, or modal needs to change: they all read tokens, never a theme id.
 
 Theme is **per-user**, backed by `users.theme`, wired end-to-end: `ThemeContext` (`src/context/ThemeContext.tsx`) applies `localStorage` before any login (first-run/login/lock screens need a theme too), then switches to the logged-in user's `theme` on login and mirrors every change back through `update_theme` — never both sources fighting over which wins.
 
 ## Auth rule (`AppState.active_user_id`)
 
-The **backend is the real access boundary**, not the UI hiding a button. Every admin-only command locks `state.db`, then calls `require_admin(&state, &conn)` (`commands/users.rs`) before doing anything — it reads `AppState.active_user_id` (never a `user_id` argument from the frontend) and checks that row's `is_admin`. A self-service command (a profile changing its own theme or auto-lock) does the same active-session lookup but skips the admin check and only ever writes to that same id — never to a `user_id` passed in by the caller. Lock order is always `db` then `active_user_id` when both are needed, kept consistent everywhere to avoid a deadlock.
+The **backend is the real access boundary**, not the UI hiding a button. Every admin-only command locks `state.db`, then calls `require_admin(&state, &conn)` (`src-tauri/src/guard.rs` — shared across `commands/*`, not duplicated per module) before doing anything — it reads `AppState.active_user_id` (never a `user_id` argument from the frontend) and checks that row's `is_admin`. A self-service command (a profile changing its own theme or auto-lock) does the same active-session lookup but skips the admin check and only ever writes to that same id — never to a `user_id` passed in by the caller. Lock order is always `db` then `active_user_id` when both are needed, kept consistent everywhere to avoid a deadlock.
 
 **Never allow zero active Admins to exist** — `update_user`/`delete_user` both call `is_last_active_admin` first and refuse to demote/deactivate/delete the only one left. Found the hard way: the very first manual test had the lone admin remove their own Admin flag, which locked the Users screen with no way back in short of hand-editing `stockly.db`.
 
 **Nobody edits their own `is_admin`/`active`, or deletes themselves** — separate from the rule above (this one applies even with other admins around): `update_user`/`delete_user` check `is_active_session` and reject touching those fields, or deleting, your own logged-in row. Granting/revoking a role or removing an account always takes a *different* admin acting on it. The frontend (`UserFormModal`, `UsersPage`) disables those controls for your own row too, so the backend rejection is a backstop, not the first line of defense.
+
+## Money field rule
+
+**Every R$ value input uses `MoneyInput`** (`src/components/MoneyInput.tsx`) — never a raw `<input type="number">`. Ported from the sibling project's component of the same name: each digit typed enters from the right, like a POS/ATM ("1" → R$ 0,01, one more "0" → R$ 0,10), rather than typing left-to-right and hoping the decimal point lands right. Its `value`/`onChange` are already a plain `number` in reais — no string parsing at the call site (see `ItemFormModal`'s `costPrice`/`salePrice`).
 
 ## Versioning rule
 
@@ -66,7 +72,7 @@ pnpm tauri icon icon-source.png   # regenerate src-tauri/icons/ from the 1024x10
 
 If `pnpm install`/`pnpm build` complains about an ignored build script (esbuild): already pre-approved via `pnpm-workspace.yaml` (`allowBuilds: esbuild: true`); if it recurs, `pnpm approve-builds --all`.
 
-`cargo test` (inside `src-tauri/`): schema smoke test (`db::tests::schema_applies_cleanly`) plus `commands::users` tests for the bcrypt hash roundtrip, the `username` uniqueness constraint, `slugify`, `unique_username`'s collision suffix, `is_last_active_admin`, and `is_active_session` — all directly against an in-memory DB (`db::test_connection()`, `#[cfg(test)] pub(crate)`); `is_active_session` even constructs a plain `AppState` directly (every field is `pub`, no Tauri runtime needed for that one). These test the SQL/bcrypt/slug/guard logic, not the `#[tauri::command]`/`State<AppState>` plumbing itself (would need a running app to construct that). No frontend tests yet.
+`cargo test` (inside `src-tauri/`): schema smoke test (`db::tests::schema_applies_cleanly`), `commands::users` tests (bcrypt hash roundtrip, `username` uniqueness, `slugify`, `unique_username`'s collision suffix, `is_last_active_admin`, `is_active_session` — the last one constructs a plain `AppState` directly, every field is `pub`, no Tauri runtime needed), and `commands::items` tests (`code_taken`'s duplicate check, `round2`'s float rounding) — all directly against an in-memory DB (`db::test_connection()`, `#[cfg(test)] pub(crate)`). These test the SQL/bcrypt/slug/guard logic, not the `#[tauri::command]`/`State<AppState>` plumbing itself (would need a running app to construct that). No frontend tests yet.
 
 ## Structure
 
@@ -77,17 +83,23 @@ Stockly/
 │   ├── mockups-ui.html          # full/Admin mockup
 │   └── mockups-ui-usuario.html  # Usuário comum mockup (subset of screens)
 ├── src/
-│   ├── App.tsx                  # routes: AuthGate → AppShell → SettingsPage / UsersPage
+│   ├── App.tsx                  # routes: AuthGate → AppShell → InventoryPage (index) / SettingsPage / UsersPage
 │   ├── main.tsx                 # applies theme + disables right-click before render
 │   ├── theme.ts                 # THEMES catalog + localStorage helpers — see "Theme rule"
 │   ├── logger.ts                # logging helper (forwards to write_log)
-│   ├── pages/                   # LoginPage, SettingsPage, UsersPage
+│   ├── pages/                   # LoginPage, InventoryPage (Estoque), SettingsPage, UsersPage
 │   ├── components/
 │   │   ├── layout/               # AuthGate, AppShell
-│   │   ├── Button.tsx / Modal.tsx / ConfirmModal.tsx   # generic primitives, token-only styling
+│   │   ├── Button.tsx / Modal.tsx / ConfirmModal.tsx / Card.tsx   # generic primitives, token-only styling
+│   │   ├── MoneyInput.tsx        # R$ input, digit-enters-from-the-right — see "Money field rule"
 │   │   ├── ThemeSwitcher.tsx     # renders the THEMES catalog — never hardcodes which themes exist
+│   │   ├── Checkbox.tsx / InfoTooltip.tsx   # styled checkbox (not the raw browser box); "?" hover/focus hint next to a label
+│   │   ├── StockBadge.tsx        # critical/warning/ok chip — same rule the Dashboard/Venda screens will reuse later
 │   │   ├── LockScreen.tsx        # idle-lock overlay (re-enters own password, keeps screen state)
-│   │   └── UserFormModal.tsx     # create/edit user, incl. the "elevate to Admin" confirm step
+│   │   ├── UserFormModal.tsx     # create/edit user, incl. the "elevate to Admin" confirm step
+│   │   ├── ItemFormModal.tsx     # Admin-only full item CRUD, incl. quantity (= ajuste de inventário)
+│   │   ├── StockAdjustModal.tsx  # any profile: add stock entry + deactivate — no price/name/category fields
+│   │   └── CategoryManagerModal.tsx  # Admin-only categories CRUD, opened from ItemFormModal
 │   ├── context/
 │   │   ├── AuthContext.tsx       # session (user, login, logout) — get_active_user on mount
 │   │   └── ThemeContext.tsx      # current theme; syncs with AuthContext's user on login
@@ -100,8 +112,9 @@ Stockly/
 │   ├── src/
 │   │   ├── lib.rs               # AppState (db, active_user_id), plugin setup, command registration
 │   │   ├── db.rs                # schema (init_db + migrate_db) — see "Schema rule" above
-│   │   ├── models.rs            # UserSummary/UserProfile (camelCase to the frontend) + shared row-mapping
-│   │   └── commands/            # auth.rs, users.rs, logging.rs
+│   │   ├── guard.rs              # require_admin/user_is_admin/active_user_id — shared across commands/*
+│   │   ├── models.rs            # UserSummary/UserProfile/CategorySummary/ItemSummary (camelCase to the frontend) + shared row-mapping
+│   │   └── commands/            # auth.rs, users.rs, categories.rs, items.rs, config.rs, logging.rs
 │   ├── Cargo.toml
 │   ├── tauri.conf.json          # identifier com.welbert.stockly, productName "Bora Vender"
 │   └── capabilities/default.json
@@ -117,17 +130,20 @@ Stockly/
 |---|---|
 | [docs/database.md](docs/database.md) | Full SQLite schema, table by table, with the design rationale behind each nullable/cascade/check |
 | [docs/commands.md](docs/commands.md) | Every Tauri command, by domain, with signature |
+| [docs/future.md](docs/future.md) | Ideas/gaps noticed along the way but out of scope for now — outlives `Plans/PLANO.md` |
 
 More docs (architecture, frontend) will be added here as those layers grow enough to need one.
 
 ## Current state
 
-Auth slice done (`PLANO.md`'s step 4.1: usuários, login, bloqueio por inatividade), on top of the scaffold + schema from before. Estoque/Vendas/Crediário/Dashboard/Relatórios are still unimplemented — `pages/` has exactly the three files below, nothing else.
+Auth (step 4.1) and Estoque (step 4.2, itens/categorias) both done, on top of the scaffold + schema from before. Vendas/Crediário/Dashboard/Relatórios are still unimplemented. CSV import/export and backup/autoupdate are deliberately deferred (PLANO.md's step 6, "funcionalidades de apoio") — the Estoque screen has no CSV buttons yet, that's expected, not a gap.
 
-- **Backend**: `commands::auth` (`login`, `logout`, `get_active_user`, `verify_password`) and `commands::users` (`has_any_users`, `list_login_profiles`, `list_users`, `create_user`, `update_user`, `delete_user`, `update_theme`, `update_my_auto_lock`) — see `docs/commands.md`. Passwords hashed with `bcrypt`. `AppState.active_user_id: Mutex<Option<i64>>` holds the in-memory session (never persisted — a process restart always shows the login screen again, unlike CashVault's "remembered profile"). `users.username` is never a form field or an argument the frontend supplies — it's auto-derived from `name` (`slugify`/`unique_username` in `commands/users.rs`) and excluded from `UserProfile` entirely (see `docs/database.md`).
-- **Frontend**: `LoginPage` (first-run admin creation form **or** profile-picker + password, keyboard-navigable), `AppShell` (sidebar + topbar, nav items filtered by `user.isAdmin`), `SettingsPage` (theme + auto-lock dropdown), `UsersPage` (Admin-only CRUD table + `UserFormModal`), `LockScreen` (auto-lock overlay, triggered by `useIdleTimer`). `AuthContext`/`ThemeContext` wrap everything in `App.tsx`. `AuthGate` owns the single `useIdleTimer` call and passes `secondsUntilLock` down to `AppShell`'s topbar warning via `<Outlet context={...}>`/`useOutletContext` (`AuthGateOutletContext`) — deliberately not a React Context module, since it's one value flowing to one child route tree.
-- **Not implemented yet, worth knowing about**: no "reset another user's password" action (an admin editing a user can't set a new password for them — not decided in `PLANO.md`, flagged but not built); `verify_password` exists and is reused-ready for the discount/cancel authorization modals, but those modals themselves don't exist until the Vendas slice.
-- Planned implementation order from here (per `PLANO.md`'s "Próximos passos"): estoque (itens/categorias) → venda (PDV) + recibo PDF → crediário/devedores → dashboard/relatórios → backup/autoupdate/CSV.
+- **Backend — auth**: `commands::auth` (`login`, `logout`, `get_active_user`, `verify_password`) and `commands::users` (`has_any_users`, `list_login_profiles`, `list_users`, `create_user`, `update_user`, `delete_user`, `update_theme`, `update_my_auto_lock`). Passwords hashed with `bcrypt`. `AppState.active_user_id: Mutex<Option<i64>>` holds the in-memory session (never persisted — a process restart always shows the login screen again, unlike CashVault's "remembered profile"). `users.username` is never a form field or an argument the frontend supplies — it's auto-derived from `name` (`slugify`/`unique_username` in `commands/users.rs`) and excluded from `UserProfile` entirely (see `docs/database.md`).
+- **Backend — estoque**: `commands::categories` (full CRUD, Admin-only) and `commands::items` (`list_items`, `create_item`, `update_item`, `delete_item`, `add_stock_entry`, `deactivate_item`) plus `commands::config` (`get_low_stock_percent`/`set_low_stock_percent`, `get_default_profit_margin`/`set_default_profit_margin`) — see `docs/commands.md`. `require_admin`/`user_is_admin`/`active_user_id` now live in `src-tauri/src/guard.rs`, shared across command modules instead of duplicated (was private to `commands/users.rs` during the auth slice).
+- **Frontend — auth**: `LoginPage` (first-run admin creation form **or** profile-picker + password, keyboard-navigable), `AppShell` (sidebar + topbar, nav items filtered by `user.isAdmin`), `SettingsPage` (theme + auto-lock dropdown + Admin-only low-stock percent), `UsersPage` (Admin-only CRUD table + `UserFormModal`), `LockScreen` (auto-lock overlay, triggered by `useIdleTimer`). `AuthContext`/`ThemeContext` wrap everything in `App.tsx`. `AuthGate` owns the single `useIdleTimer` call and passes `secondsUntilLock` down to `AppShell`'s topbar warning via `<Outlet context={...}>`/`useOutletContext` (`AuthGateOutletContext`) — deliberately not a React Context module, since it's one value flowing to one child route tree.
+- **Frontend — estoque**: `InventoryPage` (now the app's index route `/`) — search/category filter, `StockBadge` chip computed client-side from `min_quantity` + the global percent (`stockStatus()` in `lib/api.ts`), dimmed row + "Inativo" badge instead of the stock chip when `!item.active`. Admin sees "Editar"/"Excluir" (`ItemFormModal`, full CRUD incl. `quantity` = inventory correction, plus `CategoryManagerModal` reachable from within it); Usuário comum sees "Ajustar estoque" for active items only (`StockAdjustModal` — add-stock entry and deactivate only, matching the mockup's explicit note that hard-delete/reactivate/CSV stay Admin-only). On item creation, `sale_price` is pre-filled from `cost_price * (1 + default_profit_margin_percent / 100)` (`suggestedSalePrice` in `lib/api.ts`) and keeps recalculating as `cost_price` changes — only until the admin edits `sale_price` by hand (`salePriceTouched` in `ItemFormModal`), never on an existing item. **Form-modal convention** (`ItemFormModal`, `UserFormModal`): a `dirty` flag (current field values vs. the `initial` prop) gates closing — backdrop click/✕/Cancelar go through `requestClose()`, which asks via `ConfirmModal` instead of closing outright when there's unsaved input; apply the same to new form modals rather than closing unconditionally.
+- **Not implemented yet, worth knowing about**: `verify_password` is reused-ready for the discount/cancel authorization modals that arrive with Vendas; the stock movement ledger (`stock_movements`) is now actively written (`initial`/`entry`/`adjustment`) but still has no consultation screen. Known gaps/ideas noticed but out of scope: [docs/future.md](docs/future.md).
+- Planned implementation order from here (per `PLANO.md`'s "Próximos passos"): venda (PDV) + recibo PDF → crediário/devedores → dashboard/relatórios → backup/autoupdate/CSV.
 
 ## Adding features
 
@@ -152,7 +168,7 @@ pnpm add <package>                  # frontend (or pnpm add -D for dev)
 - Sale receipt numbering: `{yyyyMMdd}{6-digit sequential}`, global and gap-free, assigned in the same DB transaction as the sale — never tied to PDF generation, which can fail independently after commit (receipt regeneration is a separate on-demand action).
 - Monetary math: floats, rounded to 2 decimals after each operation (small, accepted rounding drift on sequential item+order discounts).
 - Backup uses SQLite's `VACUUM INTO` (not a raw file copy) — a raw copy can be inconsistent with an active WAL-mode connection.
-- Stock movement ledger (append-only) is recorded from day one for every quantity change (sale, entrada, ajuste, import, estorno), even with no consumer screen yet — needed later for stock-rupture forecasting.
+- Stock movement ledger (append-only) is recorded for every quantity change (sale, entrada, ajuste, import, estorno) — no consultation screen yet, needed later for stock-rupture forecasting.
 
 ## Environment notes
 

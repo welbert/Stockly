@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import type { UserProfile } from "../lib/api";
 import { createUser, updateUser } from "../lib/api";
 import { Button } from "./Button";
+import { Checkbox } from "./Checkbox";
 import { ConfirmModal } from "./ConfirmModal";
 import { Modal } from "./Modal";
 import { logger } from "../logger";
@@ -28,6 +29,21 @@ export function UserFormModal({ initial, onSaved, onClose }: UserFormModalProps)
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmElevate, setConfirmElevate] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  const dirty =
+    name !== (initial?.name ?? "") ||
+    password !== "" ||
+    isAdmin !== (initial?.isAdmin ?? false) ||
+    active !== (initial?.active ?? true);
+
+  function requestClose() {
+    if (dirty) {
+      setConfirmDiscard(true);
+    } else {
+      onClose();
+    }
+  }
 
   async function save() {
     setSubmitting(true);
@@ -63,7 +79,7 @@ export function UserFormModal({ initial, onSaved, onClose }: UserFormModalProps)
 
   return (
     <>
-      <Modal title={editing ? "Editar usuário" : "Novo usuário"} onClose={onClose}>
+      <Modal title={editing ? "Editar usuário" : "Novo usuário"} onClose={requestClose}>
         <form onSubmit={handleSubmit}>
           <Field label="Nome">
             <input required autoFocus value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
@@ -79,25 +95,13 @@ export function UserFormModal({ initial, onSaved, onClose }: UserFormModalProps)
               />
             </Field>
           )}
-          <label className="mb-1 flex items-center gap-2 text-sm text-theme-1">
-            <input
-              type="checkbox"
-              checked={isAdmin}
-              disabled={editingSelf}
-              onChange={(e) => setIsAdmin(e.target.checked)}
-            />
-            Administrador
-          </label>
+          <div className="mb-1.5">
+            <Checkbox label="Administrador" checked={isAdmin} disabled={editingSelf} onChange={setIsAdmin} />
+          </div>
           {editing && (
-            <label className="mb-1 flex items-center gap-2 text-sm text-theme-1">
-              <input
-                type="checkbox"
-                checked={active}
-                disabled={editingSelf}
-                onChange={(e) => setActive(e.target.checked)}
-              />
-              Ativo
-            </label>
+            <div className="mb-1.5">
+              <Checkbox label="Ativo" checked={active} disabled={editingSelf} onChange={setActive} />
+            </div>
           )}
           {editingSelf && (
             <p className="mb-2 text-xs text-theme-3">
@@ -106,7 +110,7 @@ export function UserFormModal({ initial, onSaved, onClose }: UserFormModalProps)
           )}
           {error && <p className="mb-2 text-xs text-danger">{error}</p>}
           <div className="mt-4 flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={onClose}>
+            <Button type="button" variant="ghost" onClick={requestClose}>
               Cancelar
             </Button>
             <Button type="submit" variant="primary" disabled={submitting}>
@@ -126,6 +130,20 @@ export function UserFormModal({ initial, onSaved, onClose }: UserFormModalProps)
             save();
           }}
           onCancel={() => setConfirmElevate(false)}
+        />
+      )}
+
+      {confirmDiscard && (
+        <ConfirmModal
+          title="Descartar alterações?"
+          message="Você tem alterações não salvas neste usuário. Fechar agora descarta o que foi digitado."
+          confirmLabel="Descartar"
+          danger
+          onConfirm={() => {
+            setConfirmDiscard(false);
+            onClose();
+          }}
+          onCancel={() => setConfirmDiscard(false)}
         />
       )}
     </>

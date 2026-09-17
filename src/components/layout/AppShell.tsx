@@ -13,11 +13,14 @@ function formatCountdown(seconds: number): string {
 
 /** `group` depende do papel: no mockup do Admin, Configurações fica junto de
  * Usuários sob "Administração"; no mockup do Usuário comum (sem Usuários no
- * menu), Configurações fica sob "Operação" junto do que ele usa no dia a dia. */
+ * menu), Configurações fica sob "Operação" junto do que ele usa no dia a dia.
+ * A ordem do array já reflete a ordem visual correta pros dois papéis —
+ * ver comentário em "Adding features" do CLAUDE.md antes de reordenar. */
 const NAV_ITEMS = [
+  { to: "/", label: "Estoque", icon: "📦", adminOnly: false, group: () => "Operação" },
   { to: "/usuarios", label: "Usuários", icon: "👤", adminOnly: true, group: () => "Administração" },
   {
-    to: "/",
+    to: "/configuracoes",
     label: "Configurações",
     icon: "⚙️",
     adminOnly: false,
@@ -28,7 +31,8 @@ const NAV_ITEMS = [
 /** Título/subtítulo do topbar por rota — mesmo texto do `titles` do mockup,
  * ajustado ao que a tela realmente tem hoje. Some rota nova, some entrada aqui. */
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
-  "/": { title: "Configurações", subtitle: "Tema e bloqueio automático" },
+  "/": { title: "Estoque", subtitle: "Itens cadastrados e categorias" },
+  "/configuracoes": { title: "Configurações", subtitle: "Tema e bloqueio automático" },
   "/usuarios": { title: "Usuários", subtitle: "Gestão de administradores e usuários" },
 };
 
