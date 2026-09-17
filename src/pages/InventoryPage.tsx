@@ -7,15 +7,8 @@ import { ConfirmModal } from "../components/ConfirmModal";
 import { ItemFormModal } from "../components/ItemFormModal";
 import { StockAdjustModal } from "../components/StockAdjustModal";
 import { StockBadge } from "../components/StockBadge";
-import { fmt } from "../lib/format";
+import { fmt, normalize } from "../lib/format";
 import { logger } from "../logger";
-
-function normalize(text: string): string {
-  return text
-    .normalize("NFD")
-    .replace(/\p{Mn}/gu, "")
-    .toLowerCase();
-}
 
 export function InventoryPage() {
   const { user } = useAuth();

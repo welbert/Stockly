@@ -56,7 +56,7 @@ pub fn rename_category(state: State<AppState>, id: i64, name: String) -> Result<
 }
 
 /// Items in this category aren't deleted — `items.category_id` is `ON DELETE
-/// SET NULL`, so they just fall back to "Categoria indefinida" (see PLANO.md).
+/// SET NULL`, so they just fall back to "Categoria indefinida".
 #[tauri::command]
 pub fn delete_category(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;

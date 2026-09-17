@@ -4,6 +4,7 @@ import { AuthGate } from "./components/layout/AuthGate";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { InventoryPage } from "./pages/InventoryPage";
+import { SalesPage } from "./pages/SalesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { UsersPage } from "./pages/UsersPage";
 
@@ -16,6 +17,7 @@ function App() {
             <Route element={<AuthGate />}>
               <Route element={<AppShell />}>
                 <Route index element={<InventoryPage />} />
+                <Route path="venda" element={<SalesPage />} />
                 <Route path="configuracoes" element={<SettingsPage />} />
                 <Route path="usuarios" element={<UsersPage />} />
               </Route>

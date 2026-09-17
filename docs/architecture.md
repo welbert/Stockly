@@ -9,7 +9,7 @@ Frontend (React)  →  invoke() via src/lib/api.ts's call<T>()
                   →  rusqlite::Connection  →  stockly.db (SQLite file)
 ```
 
-Every command locks `AppState.db` (a `Mutex<Connection>` — single connection, single writer, matches the "instância única do app" decision in `Plans/PLANO.md`) and returns a plain `Result<T, String>`; errors always cross the IPC boundary as a string message, not a typed error enum.
+Every command locks `AppState.db` (a `Mutex<Connection>` — single connection, single writer; this app runs as a single instance on one machine, not a networked multi-terminal PDV) and returns a plain `Result<T, String>`; errors always cross the IPC boundary as a string message, not a typed error enum.
 
 ## Data directory
 
@@ -33,9 +33,13 @@ pub struct AppState {
 pub(crate) fn active_user_id(state: &AppState) -> Result<i64, String>
 pub(crate) fn user_is_admin(conn: &Connection, id: i64) -> Result<bool, String>
 pub(crate) fn require_admin(state: &AppState, conn: &Connection) -> Result<i64, String>
+pub(crate) fn verify_user_password(conn: &Connection, user_id: i64, password: &str) -> Result<bool, String>
+pub(crate) fn resolve_admin_authorization(state: &AppState, conn: &Connection, authorizer_id: Option<i64>, authorizer_password: Option<&str>) -> Result<i64, String>
 ```
 
 Every `commands/*` module that needs "is someone logged in" or "is the logged-in profile an Admin" imports these instead of re-implementing them — they used to be private to `commands/users.rs` (from the auth slice) and were extracted here once `commands::categories`/`commands::items`/`commands::config` needed the same checks (see "Adding features" in `CLAUDE.md` for the pattern a new command module should follow). User-specific safety checks that only `commands::users` needs (`is_last_active_admin`, `is_active_session`, `current_flags`) stay local to that module — they're not generic enough to belong here.
+
+`resolve_admin_authorization` is the shared pattern for any admin-gated action taken *inside* a sale (currently: discount; the same helper is meant for a future cancel/estorno too): if the active session is already Admin, it self-authorizes with no extra password; otherwise it takes a *different* admin's id + password, checks that id really is an active Admin, and verifies the password via `verify_user_password` (a thin bcrypt wrapper `commands::auth::verify_password` also delegates to, so there's exactly one place that checks a password against a hash).
 
 ## Command modules (`src-tauri/src/commands/`)
 
@@ -48,6 +52,10 @@ One file per domain, each declared in `commands/mod.rs` and individually registe
 | `categories.rs` | category CRUD |
 | `items.rs` | item CRUD, stock entries/adjustments/deactivation |
 | `config.rs` | generic `config` key/value settings (low-stock %, profit margin %) |
+| `sales.rs` | PDV: sale creation (stock baixa, receipt numbering, discounts) |
+| `receipts.rs` | PDF receipt generation (`genpdf`), regeneration, print, open-folder |
 | `logging.rs` | frontend → log file bridge |
+
+`src-tauri/src/money.rs` holds `round2` (float rounded to 2 decimals after every operation), shared by `items.rs` (price fields) and `sales.rs` (subtotal/discount/total math) — the one place that rounding rule is implemented.
 
 Full command-by-command reference (arguments, return types, notes): [docs/commands.md](commands.md). Full schema: [docs/database.md](database.md).

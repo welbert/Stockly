@@ -17,6 +17,7 @@ function formatCountdown(seconds: number): string {
  * A ordem do array já reflete a ordem visual correta pros dois papéis —
  * ver comentário em "Adding features" do CLAUDE.md antes de reordenar. */
 const NAV_ITEMS = [
+  { to: "/venda", label: "Venda (PDV)", icon: "🛒", adminOnly: false, group: () => "Operação" },
   { to: "/", label: "Estoque", icon: "📦", adminOnly: false, group: () => "Operação" },
   { to: "/usuarios", label: "Usuários", icon: "👤", adminOnly: true, group: () => "Administração" },
   {
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
  * ajustado ao que a tela realmente tem hoje. Some rota nova, some entrada aqui. */
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Estoque", subtitle: "Itens cadastrados e categorias" },
+  "/venda": { title: "Venda (PDV)", subtitle: "Registro rápido de venda, otimizado para teclado" },
   "/configuracoes": { title: "Configurações", subtitle: "Tema e bloqueio automático" },
   "/usuarios": { title: "Usuários", subtitle: "Gestão de administradores e usuários" },
 };

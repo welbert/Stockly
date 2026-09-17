@@ -1,5 +1,6 @@
 use crate::guard::{active_user_id, require_admin};
 use crate::models::ItemSummary;
+use crate::money::round2;
 use crate::AppState;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use tauri::State;
@@ -29,10 +30,6 @@ fn fetch_item(conn: &Connection, id: i64) -> Result<ItemSummary, String> {
         map_item,
     )
     .map_err(|e| e.to_string())
-}
-
-fn round2(value: f64) -> f64 {
-    (value * 100.0).round() / 100.0
 }
 
 fn code_taken(conn: &Connection, code: &str, exclude_id: Option<i64>) -> Result<bool, String> {
@@ -143,9 +140,9 @@ pub fn create_item(
 }
 
 /// Admin-only full edit, including `quantity` directly — a manual correction
-/// here is exactly the "ajuste de inventário" PLANO.md reserves for Admin
-/// (logged as `adjustment`, whatever the delta's sign). Everyday stock-ins
-/// go through `add_stock_entry` instead (logged as `entry`, any profile).
+/// here is the "ajuste de inventário" reserved for Admin (logged as
+/// `adjustment`, whatever the delta's sign). Everyday stock-ins go through
+/// `add_stock_entry` instead (logged as `entry`, any profile).
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn update_item(
@@ -219,8 +216,8 @@ pub fn add_stock_entry(state: State<AppState>, item_id: i64, quantity: i64) -> R
     fetch_item(&conn, item_id)
 }
 
-/// Any logged-in profile can deactivate an item (PLANO.md: "usuário comum só
-/// pode desativá-lo") — reactivating goes through `update_item`, Admin-only.
+/// Any logged-in profile can deactivate an item — a regular user can only
+/// deactivate, not edit/reactivate, which goes through `update_item` (Admin-only).
 #[tauri::command]
 pub fn deactivate_item(state: State<AppState>, item_id: i64) -> Result<ItemSummary, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
@@ -246,13 +243,6 @@ mod tests {
         assert!(code_taken(&conn, "A1", None).unwrap());
         assert!(!code_taken(&conn, "A1", Some(id)).unwrap()); // excluindo o próprio item, não conta como "em uso"
         assert!(!code_taken(&conn, "B2", None).unwrap());
-    }
-
-    #[test]
-    fn round2_avoids_float_residue() {
-        assert_eq!(round2(19.9), 19.9);
-        assert_eq!(round2(19.999), 20.0);
-        assert_eq!(round2(0.1 + 0.2), 0.3);
     }
 
     #[test]

@@ -14,7 +14,7 @@ interface StockAdjustModalProps {
 
 /** Fluxo do Usuário comum: só dar entrada (delta positivo) e desativar — a
  * correção livre de quantidade ("ajuste de inventário") é exclusiva do
- * Administrador, via `ItemFormModal` (ver PLANO.md → Estoque). */
+ * Administrador, via `ItemFormModal`. */
 export function StockAdjustModal({ item, onSaved, onClose }: StockAdjustModalProps) {
   const [quantity, setQuantity] = useState("");
   const [error, setError] = useState<string | null>(null);

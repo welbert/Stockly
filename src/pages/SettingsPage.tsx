@@ -4,8 +4,14 @@ import {
   effectiveAutoLockMinutes,
   getDefaultProfitMargin,
   getLowStockPercent,
+  getReceiptThankYouMessage,
+  getStoreInfo,
+  getStoreName,
   setDefaultProfitMargin,
   setLowStockPercent,
+  setReceiptThankYouMessage,
+  setStoreInfo,
+  setStoreName,
   updateMyAutoLock,
 } from "../lib/api";
 import { Card } from "../components/Card";
@@ -26,6 +32,9 @@ export function SettingsPage() {
   const { user, setUser } = useAuth();
   const [lowStockPercent, setLowStockPercentState] = useState<number | null>(null);
   const [profitMargin, setProfitMarginState] = useState<number | null>(null);
+  const [storeName, setStoreNameState] = useState<string | null>(null);
+  const [storeInfo, setStoreInfoState] = useState<string | null>(null);
+  const [thankYouMessage, setThankYouMessageState] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.isAdmin) {
@@ -35,6 +44,15 @@ export function SettingsPage() {
       getDefaultProfitMargin()
         .then(setProfitMarginState)
         .catch((err) => logger.error("falha ao ler margem de lucro padrão", err));
+      getStoreName()
+        .then(setStoreNameState)
+        .catch((err) => logger.error("falha ao ler nome da loja", err));
+      getStoreInfo()
+        .then(setStoreInfoState)
+        .catch((err) => logger.error("falha ao ler informações adicionais da loja", err));
+      getReceiptThankYouMessage()
+        .then(setThankYouMessageState)
+        .catch((err) => logger.error("falha ao ler mensagem de agradecimento do recibo", err));
     }
   }, [user]);
 
@@ -64,6 +82,33 @@ export function SettingsPage() {
       await setDefaultProfitMargin(value);
     } catch (err) {
       logger.error("falha ao salvar margem de lucro padrão", err);
+    }
+  }
+
+  async function handleStoreNameBlur() {
+    if (storeName === null) return;
+    try {
+      await setStoreName(storeName);
+    } catch (err) {
+      logger.error("falha ao salvar nome da loja", err);
+    }
+  }
+
+  async function handleStoreInfoBlur() {
+    if (storeInfo === null) return;
+    try {
+      await setStoreInfo(storeInfo);
+    } catch (err) {
+      logger.error("falha ao salvar informações adicionais da loja", err);
+    }
+  }
+
+  async function handleThankYouMessageBlur() {
+    if (thankYouMessage === null) return;
+    try {
+      await setReceiptThankYouMessage(thankYouMessage);
+    } catch (err) {
+      logger.error("falha ao salvar mensagem de agradecimento do recibo", err);
     }
   }
 
@@ -131,6 +176,48 @@ export function SettingsPage() {
             Ao cadastrar um item novo, o preço de venda é sugerido automaticamente (custo + esse percentual) — ainda
             editável antes de salvar.
           </p>
+        </Card>
+      )}
+
+      {user.isAdmin && storeName !== null && storeInfo !== null && (
+        <Card title="Recibo" className="col-span-2">
+          <label className="mb-1.5 block text-xs font-semibold text-theme-3">Nome da loja</label>
+          <input
+            value={storeName}
+            onChange={(e) => setStoreNameState(e.target.value)}
+            onBlur={handleStoreNameBlur}
+            placeholder="BORA VENDER"
+            className="w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+          />
+          <p className="mt-1.5 text-xs text-theme-3">
+            Aparece em negrito no topo do recibo, no lugar de "BORA VENDER". Deixe em branco pra manter o padrão.
+          </p>
+
+          <label className="mb-1.5 mt-4 block text-xs font-semibold text-theme-3">Informações adicionais</label>
+          <textarea
+            value={storeInfo}
+            onChange={(e) => setStoreInfoState(e.target.value)}
+            onBlur={handleStoreInfoBlur}
+            rows={3}
+            placeholder={"CNPJ: 00.000.000/0000-00\nTelefone: (00) 00000-0000"}
+            className="w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+          />
+          <p className="mt-1.5 text-xs text-theme-3">
+            Uma linha por linha digitada — aparece logo abaixo do nome da loja no recibo, antes de "Recibo de Venda".
+          </p>
+
+          {thankYouMessage !== null && (
+            <>
+              <label className="mb-1.5 mt-4 block text-xs font-semibold text-theme-3">Mensagem de agradecimento</label>
+              <input
+                value={thankYouMessage}
+                onChange={(e) => setThankYouMessageState(e.target.value)}
+                onBlur={handleThankYouMessageBlur}
+                className="w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+              />
+              <p className="mt-1.5 text-xs text-theme-3">Aparece no rodapé do recibo, logo abaixo da forma de pagamento.</p>
+            </>
+          )}
         </Card>
       )}
     </div>

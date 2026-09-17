@@ -17,7 +17,7 @@ interface ItemFormModalProps {
   onClose: () => void;
 }
 
-/** Cadastro/edição de item — exclusivo do Administrador (ver PLANO.md → Estoque). */
+/** Cadastro/edição de item — exclusivo do Administrador. */
 export function ItemFormModal({ initial, onSaved, onClose }: ItemFormModalProps) {
   const editing = Boolean(initial);
   const [code, setCode] = useState(initial?.code ?? "");

@@ -31,7 +31,7 @@ interface StockBadgeProps {
   lowStockPercent: number;
 }
 
-/** "Sem estoque" é o mesmo estado crítico, só com texto diferente — não é um terceiro estado (ver PLANO.md). */
+/** "Sem estoque" é o mesmo estado crítico, só com texto diferente — não é um terceiro estado. */
 export function StockBadge({ item, lowStockPercent }: StockBadgeProps) {
   const status = stockStatus(item, lowStockPercent);
   const label = status === "critical" && item.quantity === 0 ? "Sem estoque" : LABELS[status];

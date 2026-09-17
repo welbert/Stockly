@@ -8,6 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 "Stockly" is the technical/internal name only — npm package, Rust crate, Tauri `identifier` (`com.welbert.stockly`), table/file prefixes (`stockly-backup.db`). The UI-facing name is always **"Bora Vender"** (window title/`productName`, sidebar, login screen, receipts). Never surface "Stockly" in anything the end user sees.
 
+## Language rule
+
+Code (identifiers), code comments, and everything in `docs/*.md` are always written in English (en-US) — this applies in both `src/` and `src-tauri/src/`, with no exception for a file that historically had Portuguese comments (fix it to English if you're the one touching it; don't go out of your way to retranslate untouched files). This is separate from the product's own language: end-user-facing UI text (labels, buttons, error messages) and `Plans/PLANO.md` (the business-rules spec, written for/by the Portuguese-speaking product owner) stay in Portuguese (pt-BR) — never translate those to English.
+
 ## Planning source of truth
 
 - `Plans/PLANO.md` — full product/business-rules spec. Read the relevant section before implementing any feature; it's the authority for behavior and access rules, not this file.
@@ -32,6 +36,8 @@ The **backend is the real access boundary**, not the UI hiding a button. Every a
 **Never allow zero active Admins to exist** — `update_user`/`delete_user` both call `is_last_active_admin` first and refuse to demote/deactivate/delete the only one left. Found the hard way: the very first manual test had the lone admin remove their own Admin flag, which locked the Users screen with no way back in short of hand-editing `stockly.db`.
 
 **Nobody edits their own `is_admin`/`active`, or deletes themselves** — separate from the rule above (this one applies even with other admins around): `update_user`/`delete_user` check `is_active_session` and reject touching those fields, or deleting, your own logged-in row. Granting/revoking a role or removing an account always takes a *different* admin acting on it. The frontend (`UserFormModal`, `UsersPage`) disables those controls for your own row too, so the backend rejection is a backstop, not the first line of defense.
+
+**Admin-authorization inside an in-progress action** (currently: discount in Venda) follows a shared pattern, `resolve_admin_authorization` (`guard.rs`): if the active session is already Admin, it self-authorizes with no extra password; otherwise it takes a *different* admin's id + password and re-verifies both against the DB (never trusting that the frontend already checked). The frontend (`DiscountModal`) only decides whether to *show* the password/admin-picker fields based on `user.isAdmin` — that's UX, not the boundary. Reuse this same helper for any future admin-gated in-sale action (e.g. cancel/estorno) instead of writing a parallel check.
 
 ## Money field rule
 
@@ -87,23 +93,26 @@ Stockly/
 │   ├── mockups-ui.html          # full/Admin mockup
 │   └── mockups-ui-usuario.html  # Usuário comum mockup (subset of screens)
 ├── src/
-│   ├── App.tsx                  # routes: AuthGate → AppShell → InventoryPage (index) / SettingsPage / UsersPage
+│   ├── App.tsx                  # routes: AuthGate → AppShell → InventoryPage (index) / SalesPage / SettingsPage / UsersPage
 │   ├── main.tsx                 # applies theme + disables right-click before render
 │   ├── theme.ts                 # THEMES catalog + localStorage helpers — see "Theme rule"
 │   ├── logger.ts                # logging helper (forwards to write_log)
-│   ├── pages/                   # LoginPage, InventoryPage (Estoque), SettingsPage, UsersPage
+│   ├── pages/                   # LoginPage, InventoryPage (Estoque), SalesPage (Venda/PDV), SettingsPage, UsersPage
 │   ├── components/
 │   │   ├── layout/               # AuthGate, AppShell
 │   │   ├── Button.tsx / Modal.tsx / ConfirmModal.tsx / Card.tsx   # generic primitives, token-only styling
 │   │   ├── MoneyInput.tsx        # R$ input, digit-enters-from-the-right — see "Money field rule"
 │   │   ├── ThemeSwitcher.tsx     # renders the THEMES catalog — never hardcodes which themes exist
 │   │   ├── Checkbox.tsx / InfoTooltip.tsx   # styled checkbox (not the raw browser box); "?" hover/focus hint next to a label
-│   │   ├── StockBadge.tsx        # critical/warning/ok chip — same rule the Dashboard/Venda screens will reuse later
+│   │   ├── StockBadge.tsx        # critical/warning/ok chip — same rule the Dashboard screen will reuse later
 │   │   ├── LockScreen.tsx        # idle-lock overlay (re-enters own password, keeps screen state)
 │   │   ├── UserFormModal.tsx     # create/edit user, incl. the "elevate to Admin" confirm step
 │   │   ├── ItemFormModal.tsx     # Admin-only full item CRUD, incl. quantity (= ajuste de inventário)
 │   │   ├── StockAdjustModal.tsx  # any profile: add stock entry + deactivate — no price/name/category fields
-│   │   └── CategoryManagerModal.tsx  # Admin-only categories CRUD, opened from ItemFormModal
+│   │   ├── CategoryManagerModal.tsx  # Admin-only categories CRUD, opened from ItemFormModal
+│   │   ├── DiscountModal.tsx     # item/order discount (%, R$) in Venda — admin-authorization sub-flow when needed
+│   │   ├── PaymentModal.tsx      # payment method picker (Venda) when finalizing a sale
+│   │   └── ReceiptResultModal.tsx  # post-sale result (Venda): receipt preview, imprimir/abrir pasta/nova venda
 │   ├── context/
 │   │   ├── AuthContext.tsx       # session (user, login, logout) — get_active_user on mount
 │   │   └── ThemeContext.tsx      # current theme; syncs with AuthContext's user on login
@@ -111,14 +120,16 @@ Stockly/
 │   │   └── useIdleTimer.ts       # resets on mousemove/keydown/click; fires onIdle after N minutes; secondsRemaining ticks down only in the last 30s (warning banner)
 │   └── lib/
 │       ├── api.ts               # only place that calls invoke() — typed call<T>() wrapper + all command wrappers/types
-│       └── format.ts            # fmt() currency, fmtDate()
+│       └── format.ts            # fmt() currency, fmtDate(), fmtDateTime(), normalize() (accent/case-insensitive search, shared by Estoque and Venda)
 ├── src-tauri/
 │   ├── src/
 │   │   ├── lib.rs               # AppState (db, active_user_id), plugin setup, command registration
 │   │   ├── db.rs                # schema (init_db + migrate_db) — see "Schema rule" above
-│   │   ├── guard.rs              # require_admin/user_is_admin/active_user_id — shared across commands/*
-│   │   ├── models.rs            # UserSummary/UserProfile/CategorySummary/ItemSummary (camelCase to the frontend) + shared row-mapping
-│   │   └── commands/            # auth.rs, users.rs, categories.rs, items.rs, config.rs, logging.rs
+│   │   ├── guard.rs              # require_admin/user_is_admin/active_user_id/resolve_admin_authorization — shared across commands/*
+│   │   ├── models.rs            # UserSummary/UserProfile/CategorySummary/ItemSummary/SaleItemInput/SaleItemDetail/SaleDetail (camelCase to the frontend) + shared row-mapping
+│   │   ├── money.rs              # round2() — the 2-decimal rounding rule, shared by items.rs and sales.rs
+│   │   └── commands/            # auth.rs, users.rs, categories.rs, items.rs, config.rs, sales.rs, receipts.rs, logging.rs
+│   ├── assets/fonts/            # Courier Prime TTFs (SIL OFL) embedded via include_bytes! in receipts.rs — never loaded from disk at runtime
 │   ├── Cargo.toml
 │   ├── tauri.conf.json          # identifier com.welbert.stockly, productName "Bora Vender"
 │   └── capabilities/default.json

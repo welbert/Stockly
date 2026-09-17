@@ -1,3 +1,4 @@
+use crate::guard::verify_user_password;
 use crate::models::{UserProfile, USER_PROFILE_COLUMNS};
 use crate::AppState;
 use rusqlite::{params, Connection};
@@ -52,13 +53,10 @@ pub fn get_active_user(state: State<AppState>) -> Result<Option<UserProfile>, St
 }
 
 /// Re-checks a password without touching the active session — used by the
-/// idle-lock unlock screen (own password) and, later, by admin-authorization
-/// modals (discount, cancel/refund) where a *different* admin authorizes.
+/// idle-lock unlock screen (own password) and by admin-authorization modals
+/// (discount, cancel/refund) where a *different* admin authorizes.
 #[tauri::command]
 pub fn verify_password(state: State<AppState>, user_id: i64, password: String) -> Result<bool, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let hash: String = conn
-        .query_row("SELECT password_hash FROM users WHERE id = ?1", params![user_id], |row| row.get(0))
-        .map_err(|e| e.to_string())?;
-    bcrypt::verify(&password, &hash).map_err(|e| e.to_string())
+    verify_user_password(&conn, user_id, &password)
 }

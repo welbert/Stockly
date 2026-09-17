@@ -126,14 +126,13 @@ export type ItemSummary = {
 
 export type StockStatus = "critical" | "warning" | "ok";
 
-/** Limite do chip amarelo — mesma fórmula do PLANO.md: `ceil(mínima * (1 + pct/100))`. */
+/** Limite do chip amarelo: `ceil(mínima * (1 + pct/100))`. */
 export function lowStockWarningThreshold(minQuantity: number, lowStockPercent: number): number {
   return Math.ceil(minQuantity * (1 + lowStockPercent / 100));
 }
 
-/** Mesma regra do PLANO.md ("Alerta de estoque baixo"): crítico quando
- * quantidade <= mínima; aviso na faixa acima, até `lowStockWarningThreshold`;
- * sem mínima definida, o item nunca alerta. */
+/** Crítico quando quantidade <= mínima; aviso na faixa acima, até
+ * `lowStockWarningThreshold`; sem mínima definida, o item nunca alerta. */
 export function stockStatus(item: Pick<ItemSummary, "quantity" | "minQuantity">, lowStockPercent: number): StockStatus {
   if (item.minQuantity === null) return "ok";
   if (item.quantity <= item.minQuantity) return "critical";
@@ -199,7 +198,102 @@ export function setDefaultProfitMargin(percent: number) {
   return call<void>("set_default_profit_margin", { percent });
 }
 
+export function getStoreName() {
+  return call<string>("get_store_name");
+}
+
+export function setStoreName(name: string) {
+  return call<void>("set_store_name", { name });
+}
+
+export function getStoreInfo() {
+  return call<string>("get_store_info");
+}
+
+export function setStoreInfo(info: string) {
+  return call<void>("set_store_info", { info });
+}
+
+export function getReceiptThankYouMessage() {
+  return call<string>("get_receipt_thank_you_message");
+}
+
+export function setReceiptThankYouMessage(message: string) {
+  return call<void>("set_receipt_thank_you_message", { message });
+}
+
 /** `sale_price` sugerido = custo + margem — usado só ao cadastrar um item novo. */
 export function suggestedSalePrice(costPrice: number, profitMarginPercent: number): number {
   return Math.round(costPrice * (1 + profitMarginPercent / 100) * 100) / 100;
+}
+
+export function listAdmins() {
+  return call<UserSummary[]>("list_admins");
+}
+
+export type PaymentMethod = "cash" | "card" | "pix";
+
+export type SaleItemInput = {
+  itemId: number;
+  quantity: number;
+  discountPercent: number | null;
+  discountAmount: number | null;
+};
+
+export type SaleItemDetail = {
+  itemId: number | null;
+  itemCode: string;
+  itemName: string;
+  unitPrice: number;
+  quantity: number;
+  discountPercent: number | null;
+  discountAmount: number | null;
+  subtotal: number;
+};
+
+export type SaleDetail = {
+  id: number;
+  receiptNumber: string;
+  userId: number;
+  userName: string;
+  subtotal: number;
+  discountPercent: number | null;
+  discountAmount: number | null;
+  discountAuthorizedByName: string | null;
+  total: number;
+  status: string;
+  paymentMethod: PaymentMethod;
+  createdAt: string;
+  items: SaleItemDetail[];
+  receiptPdfPath: string | null;
+};
+
+/** Arredondamento pra 2 casas decimais — mesma regra do `money::round2` no
+ * backend. Usado só pra prévia client-side do recibo; o total que vale é
+ * sempre o que o backend devolve. */
+export function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export function createSale(input: {
+  items: SaleItemInput[];
+  discountPercent: number | null;
+  discountAmount: number | null;
+  discountAuthorizerId: number | null;
+  discountAuthorizerPassword: string | null;
+  paymentMethod: PaymentMethod;
+}) {
+  return call<SaleDetail>("create_sale", input);
+}
+
+export function regenerateReceiptPdf(saleId: number) {
+  return call<string>("regenerate_receipt_pdf", { saleId });
+}
+
+export function printFile(path: string) {
+  return call<void>("print_file", { path });
+}
+
+export function openReceiptsFolder() {
+  return call<void>("open_receipts_folder");
 }

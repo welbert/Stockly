@@ -32,7 +32,7 @@ Two functions, called in this order in `open_connection`:
 | `last_login_at` | TEXT NULL | set to `datetime('now')` (UTC) by `login` on success, and by `create_user`'s first-run auto-login — `NULL` means the profile was created but has never actually logged in yet. Added after the table already existed on real installs, so it's also in `migrate_db` as an `ALTER TABLE` (see "Schema/migration pattern" above) |
 | `created_at` | TEXT | |
 
-The very first user ever created becomes Admin automatically (no role picker on that form) and is auto-logged-in right after (`Plans/PLANO.md` → "Primeiro uso do app"). Elevating an existing Usuário comum to Admin requires a confirmation modal at the UI layer — no schema-level distinction beyond the `is_admin` flag.
+The very first user ever created becomes Admin automatically (no role picker on that form) and is auto-logged-in right after. Elevating an existing Usuário comum to Admin requires a confirmation modal at the UI layer — no schema-level distinction beyond the `is_admin` flag.
 
 ### `categories` — optional item grouping
 | Column | Type | Notes |
@@ -68,7 +68,7 @@ An item with `category_id IS NULL` is displayed as "Categoria indefinida" (front
 | `user_id` | INTEGER NOT NULL → `users(id)` | who caused the movement |
 | `created_at` | TEXT | |
 
-Never edited or deleted. Written by `commands::items` (`initial` on `create_item` when the starting quantity is `> 0`, `entry` on `add_stock_entry`, `adjustment` on `update_item` when its `quantity` field's value differs from what was stored — `sale`/`refund` arrive with the Vendas slice). `items.quantity` is always updated in the same statement/transaction as the matching ledger row — the ledger is the "why", the item's column is the fast "how much now". No consultation screen yet — it's still just the data source for the future stock-rupture forecast ("Tendência: acaba em ~N dias", see `Plans/PLANO.md` → "Ideias extras").
+Never edited or deleted. Written by `commands::items` (`initial` on `create_item` when the starting quantity is `> 0`, `entry` on `add_stock_entry`, `adjustment` on `update_item` when its `quantity` field's value differs from what was stored) and by `commands::sales::create_sale` (`sale`, one row per line item, `sale_id` set — inserted only after the `sales` row exists in the same transaction, so the reference is always valid; `refund` is reserved for the not-yet-built cancel/estorno flow). `items.quantity` is always updated in the same statement/transaction as the matching ledger row — the ledger is the "why", the item's column is the fast "how much now". No consultation screen yet — it's still just the data source for a possible future stock-rupture forecast (see `docs/future.md`).
 
 ### `clients` — Crediário debtors
 | Column | Type | Notes |
@@ -100,7 +100,7 @@ Not a `users` row — clients never log in.
 | `cancel_authorized_by_user_id` | INTEGER NULL → `users(id)` | which Admin authorized it |
 | `created_at` | TEXT | |
 
-Cancelling/reverting a sale (`Plans/PLANO.md` → "Cancelamento / Estorno de venda") never deletes the row — it flips `status` to `cancelled` and fills the three `cancelled_*`/`cancel_authorized_*` columns, plus reverses the stock (a `refund`-type row per item in `stock_movements`). A Crediário client's open balance is **never a stored column** — it's always `SUM(sales.total WHERE client_id = ? AND status = 'completed' AND <a 'credit' sale_payments row exists>) - SUM(credit_payments.amount WHERE client_id = ?)`, computed on read. Cancelling a Crediário sale therefore reduces the client's balance automatically, just by excluding it from that sum — no separate reversal entry needed.
+Cancelling/reverting a sale (not built yet — depends on the "Histórico de vendas" screen to locate the sale first) never deletes the row — it flips `status` to `cancelled` and fills the three `cancelled_*`/`cancel_authorized_*` columns, plus reverses the stock (a `refund`-type row per item in `stock_movements`). A Crediário client's open balance is **never a stored column** — it's always `SUM(sales.total WHERE client_id = ? AND status = 'completed' AND <a 'credit' sale_payments row exists>) - SUM(credit_payments.amount WHERE client_id = ?)`, computed on read. Cancelling a Crediário sale therefore reduces the client's balance automatically, just by excluding it from that sum — no separate reversal entry needed.
 
 Indexed on `client_id` and `status` (the two columns "Devedores" and sale listings filter by).
 
@@ -112,7 +112,7 @@ Indexed on `client_id` and `status` (the two columns "Devedores" and sale listin
 | `payment_method` | TEXT CHECK IN (`cash`, `card`, `pix`, `credit`) | |
 | `amount` | REAL, `CHECK (> 0)` | |
 
-Modeled as its own table from day one specifically so a future split-payment feature (e.g. part PIX, part Crediário — `Plans/PLANO.md` marks it "Fase 2, não implementar agora") needs no schema migration: v1 command code always writes exactly one row per sale, but nothing about the table assumes that.
+Modeled as its own table from day one specifically so a future split-payment feature (e.g. part PIX, part Crediário — deliberately not implemented in v1) needs no schema migration: `create_sale` always writes exactly one row per sale today, but nothing about the table assumes that.
 
 ### `sale_items` — line items of a sale
 | Column | Type | Notes |
@@ -126,7 +126,7 @@ Modeled as its own table from day one specifically so a future split-payment fea
 | `discount_percent` / `discount_amount` | REAL NULL, `CHECK` 0–100 / `>= 0` | the *item-level* discount (applied before the sale's general discount) |
 | `subtotal` | REAL, `CHECK (>= 0)` | this line's total after its own discount |
 
-`item_code`/`item_name` are snapshotted (not just joined from `items`) and `item_id` uses `ON DELETE SET NULL` rather than a hard foreign key requirement, because an Admin is allowed to hard-delete an item from the catalog (`Plans/PLANO.md` → "Excluir um item do estoque (não só desativar)") — a past receipt must keep showing the correct name/code even after that.
+`item_code`/`item_name` are snapshotted (not just joined from `items`) and `item_id` uses `ON DELETE SET NULL` rather than a hard foreign key requirement, because an Admin is allowed to hard-delete an item from the catalog — a past receipt must keep showing the correct name/code even after that.
 
 ### `credit_payments` — Crediário debt settlements
 | Column | Type | Notes |
@@ -141,4 +141,4 @@ Modeled as its own table from day one specifically so a future split-payment fea
 ```
 config(key TEXT PRIMARY KEY, value TEXT NOT NULL)
 ```
-No rows are seeded — `commands::config`'s getters fall back to a default in code when the key is absent rather than seeding a row. Keys in use: `low_stock_warning_percent` (the global "yellow chip" threshold, defaults to `20`, see `Plans/PLANO.md` → "Alerta de estoque baixo") and `default_profit_margin_percent` (suggests `sale_price` on item creation as `cost_price * (1 + percent / 100)`, defaults to `30`; Admin-only, editable in Configurações). Expected as later features land: `backup_folder` (chosen backup destination) and whether Crediário is enabled as a payment method (`Plans/PLANO.md` → "Configurações — trava de desativação": can only be turned off while no client has an open balance).
+No rows are seeded — `commands::config`'s getters fall back to a default in code when the key is absent rather than seeding a row. Keys in use: `low_stock_warning_percent` (the global "yellow chip" threshold, defaults to `20`), `default_profit_margin_percent` (suggests `sale_price` on item creation as `cost_price * (1 + percent / 100)`, defaults to `30`; Admin-only, editable in Configurações), `store_name` and `store_info` (both default to `""`; feed the receipt header — see `commands::receipts` — falling back to "BORA VENDER" with no extra lines when empty), `receipt_thank_you_message` (defaults to `"Obrigado pela preferência!"` — unlike the two above, this one's default *is* real content, not an empty-means-fallback value). Expected as later features land: `backup_folder` (chosen backup destination) and whether Crediário is enabled as a payment method (can only be turned off while no client has an open balance, per `docs/future.md`).

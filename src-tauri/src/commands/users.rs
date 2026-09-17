@@ -1,4 +1,4 @@
-use crate::guard::require_admin;
+use crate::guard::{active_user_id, require_admin};
 use crate::models::{UserProfile, UserSummary, USER_PROFILE_COLUMNS};
 use crate::AppState;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -124,6 +124,29 @@ pub fn list_login_profiles(state: State<AppState>) -> Result<Vec<UserSummary>, S
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare("SELECT id, name, is_admin, active FROM users WHERE active = 1 ORDER BY name")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(UserSummary {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                is_admin: row.get::<_, i64>(2)? != 0,
+                active: row.get::<_, i64>(3)? != 0,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Active admins only — feeds the "select which admin is authorizing"
+/// picker in the discount/cancel modals (any logged-in profile can call
+/// this, it's just names, not the actual authorization check).
+#[tauri::command]
+pub fn list_admins(state: State<AppState>) -> Result<Vec<UserSummary>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    active_user_id(&state)?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, is_admin, active FROM users WHERE is_admin = 1 AND active = 1 ORDER BY name")
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {

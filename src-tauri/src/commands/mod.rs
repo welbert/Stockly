@@ -3,4 +3,6 @@ pub mod categories;
 pub mod config;
 pub mod items;
 pub mod logging;
+pub mod receipts;
+pub mod sales;
 pub mod users;

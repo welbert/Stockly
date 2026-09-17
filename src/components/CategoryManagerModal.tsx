@@ -10,7 +10,7 @@ interface CategoryManagerModalProps {
   onClose: () => void;
 }
 
-/** CRUD de categorias — exclusivo do Administrador (ver PLANO.md → Estoque). */
+/** CRUD de categorias — exclusivo do Administrador. */
 export function CategoryManagerModal({ onChanged, onClose }: CategoryManagerModalProps) {
   const [categories, setCategories] = useState<CategorySummary[]>([]);
   const [newName, setNewName] = useState("");

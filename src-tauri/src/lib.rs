@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod guard;
 mod models;
+mod money;
 
 use rusqlite::Connection;
 use std::path::PathBuf;
@@ -62,6 +63,17 @@ pub fn run() {
             commands::config::set_low_stock_percent,
             commands::config::get_default_profit_margin,
             commands::config::set_default_profit_margin,
+            commands::config::get_store_name,
+            commands::config::set_store_name,
+            commands::config::get_store_info,
+            commands::config::set_store_info,
+            commands::config::get_receipt_thank_you_message,
+            commands::config::set_receipt_thank_you_message,
+            commands::users::list_admins,
+            commands::sales::create_sale,
+            commands::receipts::regenerate_receipt_pdf,
+            commands::receipts::print_file,
+            commands::receipts::open_receipts_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
