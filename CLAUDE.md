@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Stockly** ("Bora Vender" in the UI — see naming rule below) is a single-machine desktop inventory/POS app with Admin and Usuário (regular user) profiles: stock control, sales (PDV) with PDF receipts, Crediário/Devedores (store credit), dashboard, reports. Modeled on the same architecture as the sibling project `F:\VS\Pessoal\CashVault` — reuse its patterns (`lib.rs`/`db.rs` structure, `logger.ts`, theme tokens, `dashboard_layout`, backup via `VACUUM INTO`) rather than inventing new ones.
+**Stockly** ("Bora Vender" in the UI — see naming rule below) is a single-machine desktop inventory/POS app with Admin and Usuário (regular user) profiles: stock control, sales (PDV) with PDF receipts, Crediário/Devedores (store credit), dashboard, reports.
 
 ## Naming rule
 
@@ -19,13 +19,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Never hardcode a Tailwind background/text/border color — always use the `bg-theme-*` / `text-theme-*` / `border-theme-border` tokens defined in `src/index.css`, switched via `data-theme="light"|"dark"` (`src/theme.ts`, only two themes). `--color-primary` (indigo, `#4f46e5`) is the one brand accent, taken from the mockups' `--primary` — components should use `primary`/`primary-hover`/`primary-soft` classes, never a hardcoded hex.
 
+Theme is **per-user** (decided), backed by `users.theme` (see `docs/database.md`) — but `src/theme.ts` still reads/writes `localStorage` as a stopgap, since there's no login/session yet to know whose row to read. When auth lands, replace the localStorage path with a real read-on-login/write-through-command flow instead of keeping both.
+
 ## Versioning rule
 
 **When bumping the version, update all 3 files in sync** — they always need to match: `package.json` (`"version"`), `src-tauri/Cargo.toml` (`version`), `src-tauri/tauri.conf.json` (`"version"`).
 
-## Schema rule (once `db.rs` exists)
+## Schema rule (`src-tauri/src/db.rs`)
 
-Not written yet, but when it is (mirroring CashVault's `init_db`/`migrate_db` split): every new table/column goes in **two places** — the `CREATE TABLE` inside `init_db` (fresh install) and an idempotent `ALTER TABLE` inside `migrate_db` (existing databases). A `CREATE INDEX` on a new column can only live in `migrate_db`, never appended to `init_db`'s `CREATE TABLE IF NOT EXISTS` — if the table already existed, that statement is a no-op and the column won't be there yet.
+Every new table/column goes in **two places**: the `CREATE TABLE` inside `init_db` (fresh install) and an idempotent `ALTER TABLE` inside `migrate_db` (existing databases). A `CREATE INDEX` on a new column can only live in `migrate_db`, never appended to `init_db`'s `CREATE TABLE IF NOT EXISTS` — if the table already existed, that statement is a no-op and the column won't be there yet. `migrate_db` is still empty (schema v1, no prior version to migrate from) — first real entry goes there when the first schema change happens, never as an edit to `init_db`'s `CREATE TABLE`. Full schema, column-by-column, in [docs/database.md](docs/database.md).
 
 ## Stack
 
@@ -54,7 +56,7 @@ pnpm tauri icon icon-source.png   # regenerate src-tauri/icons/ from the 1024x10
 
 If `pnpm install`/`pnpm build` complains about an ignored build script (esbuild): already pre-approved via `pnpm-workspace.yaml` (`allowBuilds: esbuild: true`); if it recurs, `pnpm approve-builds --all`.
 
-No test suite exists yet.
+`cargo test` (inside `src-tauri/`) — only a schema smoke test so far (`db::tests::schema_applies_cleanly`, checks `init_db`/`migrate_db` apply without error and that `init_db` is idempotent). No frontend tests yet.
 
 ## Structure
 
@@ -67,26 +69,37 @@ Stockly/
 ├── src/
 │   ├── App.tsx                  # placeholder shell — no routes/pages yet
 │   ├── main.tsx                 # applies theme + disables right-click before render
-│   ├── theme.ts / logger.ts     # theme (light/dark) and logging helpers, same pattern as CashVault
+│   ├── theme.ts / logger.ts     # theme (light/dark) and logging helpers
 │   ├── pages/ components/ context/ hooks/   # empty — filled per the vertical-slice order below
 │   └── lib/
 │       ├── api.ts               # only place that calls invoke() — typed call<T>() wrapper
 │       └── format.ts            # fmt() currency, fmtDate()
 ├── src-tauri/
 │   ├── src/
-│   │   ├── lib.rs               # plugin setup + command registration (no AppState/db yet)
+│   │   ├── lib.rs               # AppState (db connection), plugin setup, command registration
+│   │   ├── db.rs                # schema (init_db + migrate_db) — see "Schema rule" above
 │   │   └── commands/            # one file per domain — so far only logging.rs
 │   ├── Cargo.toml
 │   ├── tauri.conf.json          # identifier com.welbert.stockly, productName "Bora Vender"
 │   └── capabilities/default.json
+├── docs/
+│   └── database.md              # full schema, table by table
 └── icon-source.png / icon.ico    # master icon assets (see Environment notes)
 ```
 
+## Technical documentation
+
+| File | Content |
+|---|---|
+| [docs/database.md](docs/database.md) | Full SQLite schema, table by table, with the design rationale behind each nullable/cascade/check |
+
+More docs (architecture, commands, frontend) will be added here as those layers get built — see "Current state" below.
+
 ## Current state
 
-Scaffold stage: the Tauri + React shell builds and runs (`pnpm tauri dev` confirmed working). No database schema, no domain commands, no real pages yet.
+Scaffold + initial schema stage: the Tauri + React shell builds and runs (`pnpm tauri dev` confirmed working), and the SQLite schema exists, but no domain commands or real pages yet — `AppState.db` is opened and managed, nothing reads/writes it besides `init_db`.
 
-- Backend implemented: only `commands::logging` (`write_log`, `open_log_dir`), writing to Tauri's app log dir.
+- Backend implemented: `db.rs` (full v1 schema, see `docs/database.md`) and `commands::logging` (`write_log`, `open_log_dir`). No `models.rs` yet (arrives with the first real command, alongside the frontend types it serializes to).
 - Frontend implemented: bare `App.tsx` placeholder, `theme.ts`, `logger.ts`, `lib/api.ts`, `lib/format.ts`. `pages/`/`components/`/`context/`/`hooks/` are empty.
 - Planned implementation order (per `PLANO.md`'s "Próximos passos"): auth/first-run/bloqueio por inatividade → estoque (itens/categorias) → venda (PDV) + recibo PDF → crediário/devedores → dashboard/relatórios → backup/autoupdate/CSV.
 
@@ -98,7 +111,7 @@ Scaffold stage: the Tauri + React shell builds and runs (`pnpm tauri dev` confir
 3. Add the corresponding typed wrapper in `src/lib/api.ts`.
 
 ### New table/column
-See "Schema rule" above (applies once `db.rs` is created).
+See "Schema rule" above.
 
 ### New dependency
 ```bash

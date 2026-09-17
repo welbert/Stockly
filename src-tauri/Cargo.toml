@@ -2,7 +2,7 @@
 name = "stockly-app"
 version = "0.1.0"
 description = "Bora Vender"
-authors = ["you"]
+authors = ["welbert"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
