@@ -4,6 +4,7 @@ import type { CategorySummary, ItemSummary } from "../lib/api";
 import { deleteItem, getLowStockPercent, listCategories, listItems } from "../lib/api";
 import { Button } from "../components/Button";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { ContextMenu, ContextMenuItem } from "../components/ContextMenu";
 import { ItemFormModal } from "../components/ItemFormModal";
 import { StockAdjustModal } from "../components/StockAdjustModal";
 import { StockBadge } from "../components/StockBadge";
@@ -21,6 +22,7 @@ export function InventoryPage() {
   const [adjusting, setAdjusting] = useState<ItemSummary | null>(null);
   const [toDelete, setToDelete] = useState<ItemSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; actions: ContextMenuItem[] } | null>(null);
 
   function reload() {
     listItems()
@@ -61,6 +63,23 @@ export function InventoryPage() {
   }
 
   if (!user) return null;
+
+  function itemActions(item: ItemSummary): ContextMenuItem[] {
+    if (user!.isAdmin) {
+      return [
+        { label: "Editar", onSelect: () => setEditing(item) },
+        {
+          label: "Excluir",
+          danger: true,
+          onSelect: () => {
+            setDeleteError(null);
+            setToDelete(item);
+          },
+        },
+      ];
+    }
+    return item.active ? [{ label: "Ajustar estoque", onSelect: () => setAdjusting(item) }] : [];
+  }
 
   return (
     <div>
@@ -110,6 +129,11 @@ export function InventoryPage() {
               <tr
                 key={item.id}
                 className={`border-b border-theme-border last:border-0 hover:bg-theme-hover ${!item.active ? "opacity-60" : ""}`}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  const actions = itemActions(item);
+                  if (actions.length > 0) setContextMenu({ x: e.clientX, y: e.clientY, actions });
+                }}
               >
                 <td className="px-4 py-3">
                   <code className="rounded-md border border-theme-border bg-theme-hover px-1.5 py-0.5 text-xs">
@@ -202,6 +226,15 @@ export function InventoryPage() {
           error={deleteError}
           onConfirm={handleDelete}
           onCancel={() => setToDelete(null)}
+        />
+      )}
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.actions}
+          onClose={() => setContextMenu(null)}
         />
       )}
     </div>

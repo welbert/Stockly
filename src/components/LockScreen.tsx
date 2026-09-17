@@ -34,7 +34,7 @@ export function LockScreen({ user, onUnlock }: LockScreenProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-theme-overlay px-4">
+    <div data-modal-root className="fixed inset-0 z-50 flex items-center justify-center bg-theme-overlay px-4">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-2xl border border-theme-border bg-theme-surface p-6 shadow-xl"

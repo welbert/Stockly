@@ -27,7 +27,7 @@ export function ConfirmModal({
       <p className="text-sm text-theme-2">{message}</p>
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
       <div className="mt-5 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onCancel}>
+        <Button variant="secondary" onClick={onCancel}>
           Cancelar
         </Button>
         <Button variant={danger ? "danger" : "primary"} onClick={onConfirm}>

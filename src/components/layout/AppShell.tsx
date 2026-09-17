@@ -1,6 +1,6 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation, useOutletContext } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { logger } from "../../logger";
 import type { AuthGateOutletContext } from "./AuthGate";
@@ -19,6 +19,7 @@ function formatCountdown(seconds: number): string {
 const NAV_ITEMS = [
   { to: "/venda", label: "Venda (PDV)", icon: "🛒", adminOnly: false, group: () => "Operação" },
   { to: "/", label: "Estoque", icon: "📦", adminOnly: false, group: () => "Operação" },
+  { to: "/devedores", label: "Devedores", icon: "💳", adminOnly: false, group: () => "Operação" },
   { to: "/usuarios", label: "Usuários", icon: "👤", adminOnly: true, group: () => "Administração" },
   {
     to: "/configuracoes",
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Estoque", subtitle: "Itens cadastrados e categorias" },
   "/venda": { title: "Venda (PDV)", subtitle: "Registro rápido de venda, otimizado para teclado" },
+  "/devedores": { title: "Devedores (Crediário)", subtitle: "Saldo em aberto, histórico de vendas fiado e pagamentos por cliente" },
   "/configuracoes": { title: "Configurações", subtitle: "Tema e bloqueio automático" },
   "/usuarios": { title: "Usuários", subtitle: "Gestão de administradores e usuários" },
 };
@@ -41,6 +43,7 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
 export function AppShell() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const { secondsUntilLock } = useOutletContext<AuthGateOutletContext>();
   const [version, setVersion] = useState<string | null>(null);
 
@@ -50,13 +53,24 @@ export function AppShell() {
       .catch((err) => logger.error("falha ao ler a versão do app", err));
   }, []);
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key !== "F1") return;
+      if (document.querySelector("[data-modal-root]")) return;
+      e.preventDefault();
+      navigate("/venda");
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [navigate]);
+
   if (!user) return null;
 
   const page = PAGE_META[pathname];
 
   return (
-    <div className="grid min-h-screen grid-cols-[220px_1fr]">
-      <aside className="flex min-h-screen flex-col gap-1 bg-sidebar-bg p-4 text-sidebar-text">
+    <div className="grid h-screen grid-cols-[220px_1fr]">
+      <aside className="flex h-full flex-col gap-1 overflow-y-auto bg-sidebar-bg p-4 text-sidebar-text">
         <div className="mb-4 flex items-center gap-2 px-1 text-sm font-bold text-white">
           <span className="h-2.5 w-2.5 rounded-sm bg-gradient-to-br from-primary to-primary-hover" />
           Bora Vender
@@ -90,6 +104,11 @@ export function AppShell() {
                       {item.icon}
                     </span>
                     {item.label}
+                    {item.to === "/venda" && (
+                      <span className="ml-auto rounded border border-white/20 px-1 text-[10px] font-semibold text-sidebar-label">
+                        F1
+                      </span>
+                    )}
                   </NavLink>
                 </div>
               );
@@ -115,7 +134,7 @@ export function AppShell() {
           </div>
         </div>
       </aside>
-      <div className="flex flex-col">
+      <div className="flex min-h-0 flex-col">
         {page && (
           <header className="flex items-center justify-between border-b border-theme-border bg-theme-surface px-6 py-3.5">
             <h1 className="text-base font-semibold text-theme-1">
@@ -133,7 +152,7 @@ export function AppShell() {
             </div>
           </header>
         )}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="min-h-0 flex-1 overflow-auto p-6">
           <Outlet />
         </main>
       </div>

@@ -66,11 +66,11 @@ export function StockAdjustModal({ item, onSaved, onClose }: StockAdjustModalPro
           />
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
           <div className="mt-4 flex items-center justify-between">
-            <Button type="button" variant="ghost" className="text-danger" onClick={() => setConfirmDeactivate(true)}>
+            <Button type="button" variant="secondary" className="text-danger" onClick={() => setConfirmDeactivate(true)}>
               Desativar item
             </Button>
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={onClose}>
+              <Button type="button" variant="secondary" onClick={onClose}>
                 Cancelar
               </Button>
               <Button type="submit" variant="primary" disabled={submitting}>

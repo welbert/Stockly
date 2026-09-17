@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import type { CategorySummary } from "../lib/api";
 import { createCategory, deleteCategory, listCategories, renameCategory } from "../lib/api";
 import { Button } from "./Button";
+import { ContextMenu, ContextMenuItem } from "./ContextMenu";
 import { Modal } from "./Modal";
 import { logger } from "../logger";
 
@@ -17,6 +18,7 @@ export function CategoryManagerModal({ onChanged, onClose }: CategoryManagerModa
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; actions: ContextMenuItem[] } | null>(null);
 
   function reload() {
     listCategories()
@@ -62,6 +64,25 @@ export function CategoryManagerModal({ onChanged, onClose }: CategoryManagerModa
     }
   }
 
+  function categoryActions(c: CategorySummary): ContextMenuItem[] {
+    if (editingId === c.id) {
+      return [
+        { label: "Salvar", onSelect: () => handleRename(c.id) },
+        { label: "Cancelar", onSelect: () => setEditingId(null) },
+      ];
+    }
+    return [
+      {
+        label: "Renomear",
+        onSelect: () => {
+          setEditingId(c.id);
+          setEditingName(c.name);
+        },
+      },
+      { label: "Excluir", danger: true, onSelect: () => handleDelete(c.id) },
+    ];
+  }
+
   return (
     <Modal title="Categorias" onClose={onClose}>
       <form onSubmit={handleCreate} className="mb-4 flex gap-2">
@@ -81,7 +102,14 @@ export function CategoryManagerModal({ onChanged, onClose }: CategoryManagerModa
 
       <ul className="flex max-h-64 flex-col gap-1 overflow-auto">
         {categories.map((c) => (
-          <li key={c.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-theme-hover">
+          <li
+            key={c.id}
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-theme-hover"
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setContextMenu({ x: e.clientX, y: e.clientY, actions: categoryActions(c) });
+            }}
+          >
             {editingId === c.id ? (
               <>
                 <input
@@ -118,6 +146,15 @@ export function CategoryManagerModal({ onChanged, onClose }: CategoryManagerModa
         ))}
         {categories.length === 0 && <li className="px-2 py-1.5 text-sm text-theme-3">Nenhuma categoria cadastrada.</li>}
       </ul>
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.actions}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </Modal>
   );
 }

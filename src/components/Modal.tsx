@@ -30,6 +30,7 @@ export function Modal({ title, children, onClose, dismissible = true, size = "sm
 
   return (
     <div
+      data-modal-root
       className="fixed inset-0 z-50 flex items-center justify-center bg-theme-overlay px-4"
       onMouseDown={(e) => {
         if (dismissible && onClose && e.target === e.currentTarget) onClose();

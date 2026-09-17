@@ -5,6 +5,7 @@ import type { UserProfile } from "../lib/api";
 import { deleteUser, listUsers } from "../lib/api";
 import { Button } from "../components/Button";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { ContextMenu, ContextMenuItem } from "../components/ContextMenu";
 import { UserFormModal } from "../components/UserFormModal";
 import { fmtDateTime } from "../lib/format";
 import { logger } from "../logger";
@@ -15,6 +16,7 @@ export function UsersPage() {
   const [editing, setEditing] = useState<UserProfile | "new" | null>(null);
   const [toDelete, setToDelete] = useState<UserProfile | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; actions: ContextMenuItem[] } | null>(null);
 
   function reload() {
     listUsers()
@@ -28,6 +30,21 @@ export function UsersPage() {
 
   if (!user?.isAdmin) {
     return <Navigate to="/" replace />;
+  }
+
+  function userActions(u: UserProfile): ContextMenuItem[] {
+    const actions: ContextMenuItem[] = [{ label: "Editar", onSelect: () => setEditing(u) }];
+    if (u.id !== user!.id) {
+      actions.push({
+        label: "Excluir",
+        danger: true,
+        onSelect: () => {
+          setDeleteError(null);
+          setToDelete(u);
+        },
+      });
+    }
+    return actions;
   }
 
   async function handleDelete() {
@@ -64,7 +81,14 @@ export function UsersPage() {
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} className="border-b border-theme-border last:border-0 hover:bg-theme-hover">
+              <tr
+                key={u.id}
+                className="border-b border-theme-border last:border-0 hover:bg-theme-hover"
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setContextMenu({ x: e.clientX, y: e.clientY, actions: userActions(u) });
+                }}
+              >
                 <td className="px-4 py-3 text-theme-1">{u.name}</td>
                 <td className="px-4 py-3">
                   <Badge tone={u.isAdmin ? "admin" : "neutral"}>{u.isAdmin ? "Administrador" : "Usuário"}</Badge>
@@ -116,6 +140,15 @@ export function UsersPage() {
           error={deleteError}
           onConfirm={handleDelete}
           onCancel={() => setToDelete(null)}
+        />
+      )}
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.actions}
+          onClose={() => setContextMenu(null)}
         />
       )}
     </div>

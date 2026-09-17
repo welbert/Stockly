@@ -205,7 +205,7 @@ export function ItemFormModal({ initial, onSaved, onClose }: ItemFormModalProps)
 
           {error && <p className="mb-2 text-xs text-danger">{error}</p>}
           <div className="mt-2 flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={requestClose}>
+            <Button type="button" variant="secondary" onClick={requestClose}>
               Cancelar
             </Button>
             <Button type="submit" variant="primary" disabled={submitting}>
