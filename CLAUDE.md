@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Naming rule
 
-"Stockly" is the technical/internal name only — npm package, Rust crate, Tauri `identifier` (`com.welbert.stockly`), table/file prefixes (`stockly-backup.db`). The UI-facing name is always **"Bora Vender"** (window title/`productName`, sidebar, login screen, receipts). Never surface "Stockly" in anything the end user sees.
+"Stockly" is the technical/internal name only — npm package, Rust crate, Tauri `identifier` (`com.welbert.stockly`), table/file prefixes (`stockly-backup.db`). The UI-facing name is always **"Bora Vender"** (window title/`productName`, sidebar brand — falls back to it when no store name is configured in Configurações, login screen, receipts). Never surface "Stockly" in anything the end user sees — **except the sidebar footer's version line** (`AppShell.tsx`), a deliberate exception: shows "Stockly - v{version}" instead of "Bora Vender - v{version}", since the version being tracked is the app build's own, and "Stockly" reads more like a product/build identifier there than a customer-facing brand moment.
 
 ## Language rule
 

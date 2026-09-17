@@ -8,6 +8,7 @@ import {
   getReceiptThankYouMessage,
   getStoreInfo,
   getStoreName,
+  openLogDir,
   setCreditEnabled,
   setDefaultProfitMargin,
   setLowStockPercent,
@@ -16,6 +17,7 @@ import {
   setStoreName,
   updateMyAutoLock,
 } from "../lib/api";
+import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Checkbox } from "../components/Checkbox";
 import { ThemeSwitcher } from "../components/ThemeSwitcher";
@@ -40,6 +42,7 @@ export function SettingsPage() {
   const [thankYouMessage, setThankYouMessageState] = useState<string | null>(null);
   const [creditEnabled, setCreditEnabledState] = useState<boolean | null>(null);
   const [creditError, setCreditError] = useState<string | null>(null);
+  const [logDirError, setLogDirError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.isAdmin) {
@@ -120,6 +123,16 @@ export function SettingsPage() {
     }
   }
 
+  async function handleOpenLogDir() {
+    setLogDirError(null);
+    try {
+      await openLogDir();
+    } catch (err) {
+      logger.error("falha ao abrir pasta de logs", err);
+      setLogDirError(String(err));
+    }
+  }
+
   async function handleCreditEnabledChange(value: boolean) {
     setCreditError(null);
     try {
@@ -154,6 +167,16 @@ export function SettingsPage() {
         </select>
         <p className="mt-2.5 text-xs text-theme-3">
           Padrão para {user.isAdmin ? "Administrador" : "Usuário"}: {user.isAdmin ? "5 minutos" : "Nunca"}.
+        </p>
+      </Card>
+
+      <Card title="Diagnóstico">
+        <Button variant="secondary" onClick={handleOpenLogDir}>
+          Abrir pasta de logs
+        </Button>
+        {logDirError && <p className="mt-2 text-xs text-danger">{logDirError}</p>}
+        <p className="mt-2.5 text-xs text-theme-3">
+          Caso o app apresente algum problema, os arquivos de log ficam aqui — encaminhe pra investigação.
         </p>
       </Card>
 

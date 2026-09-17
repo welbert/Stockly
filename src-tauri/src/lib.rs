@@ -72,6 +72,8 @@ pub fn run() {
             commands::users::list_admins,
             commands::sales::create_sale,
             commands::sales::get_sale_detail,
+            commands::sales::list_sales,
+            commands::sales::cancel_sale,
             commands::receipts::regenerate_receipt_pdf,
             commands::receipts::print_file,
             commands::receipts::open_receipts_folder,

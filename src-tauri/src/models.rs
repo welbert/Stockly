@@ -114,12 +114,34 @@ pub struct SaleDetail {
     /// front (the whole `total` sits as open balance) or the sale isn't
     /// Crediário at all.
     pub credit_paid_now: Option<f64>,
+    /// The four `cancelled_*`/`cancel_*` fields below are only set once the
+    /// sale has been cancelled/estornada — never deleted, see
+    /// `commands::sales::cancel_sale`.
+    pub cancelled_at: Option<String>,
+    pub cancelled_by_name: Option<String>,
+    pub cancel_authorized_by_name: Option<String>,
     pub created_at: String,
     pub items: Vec<SaleItemDetail>,
     /// `None` when the PDF failed to generate right after the sale committed
     /// (disk full, permission, ...) — the sale itself is still valid either
     /// way; the frontend offers "gerar recibo" again in that case.
     pub receipt_pdf_path: Option<String>,
+}
+
+/// Lightweight row for the Histórico de vendas listing — no line items (those
+/// are a separate round-trip via `get_sale_detail`, only fetched once a
+/// specific sale is opened).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SaleListItem {
+    pub id: i64,
+    pub receipt_number: String,
+    pub created_at: String,
+    pub user_name: String,
+    pub client_name: Option<String>,
+    pub payment_method: String,
+    pub total: f64,
+    pub status: String,
 }
 
 /// A client ("devedor") with their computed Crediário balance — used both by
@@ -144,6 +166,9 @@ pub struct CreditSaleSummary {
     pub receipt_number: String,
     pub created_at: String,
     pub total: f64,
+    /// `"completed"` or `"cancelled"` — so Devedores can flag a reversed sale
+    /// without needing to open "Ver venda" to find out.
+    pub status: String,
 }
 
 #[derive(Serialize, Clone)]

@@ -12,7 +12,7 @@ export interface AuthGateOutletContext {
 }
 
 export function AuthGate() {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
   const [locked, setLocked] = useState(false);
   const { secondsRemaining } = useIdleTimer(user ? effectiveAutoLockMinutes(user) : null, () => setLocked(true));
 
@@ -24,10 +24,20 @@ export function AuthGate() {
     return <LoginPage />;
   }
 
+  // `locked` must be reset here, not left for the `!user` branch above to
+  // implicitly "clear" — this component never unmounts on logout (only its
+  // return value switches to `<LoginPage/>`), so once a *different* profile
+  // logs back in, a stale `locked=true` would immediately re-show the lock
+  // screen over their fresh session.
+  async function handleLogoutFromLock() {
+    setLocked(false);
+    await logout();
+  }
+
   return (
     <>
       <Outlet context={{ secondsUntilLock: secondsRemaining } satisfies AuthGateOutletContext} />
-      {locked && <LockScreen user={user} onUnlock={() => setLocked(false)} />}
+      {locked && <LockScreen user={user} onUnlock={() => setLocked(false)} onLogout={handleLogoutFromLock} />}
     </>
   );
 }

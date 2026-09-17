@@ -6,10 +6,13 @@ import { Button } from "../components/Button";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { ContextMenu, ContextMenuItem } from "../components/ContextMenu";
 import { ItemFormModal } from "../components/ItemFormModal";
+import { Pagination } from "../components/Pagination";
 import { StockAdjustModal } from "../components/StockAdjustModal";
 import { StockBadge } from "../components/StockBadge";
 import { fmt, normalize } from "../lib/format";
 import { logger } from "../logger";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 export function InventoryPage() {
   const { user } = useAuth();
@@ -23,6 +26,8 @@ export function InventoryPage() {
   const [toDelete, setToDelete] = useState<ItemSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; actions: ContextMenuItem[] } | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[1]);
 
   function reload() {
     listItems()
@@ -48,6 +53,13 @@ export function InventoryPage() {
       return matchesTerm && matchesCategory;
     });
   }, [items, search, categoryFilter]);
+
+  useEffect(() => setPage(0), [search, categoryFilter]);
+
+  const paginated = useMemo(
+    () => filtered.slice(page * pageSize, (page + 1) * pageSize),
+    [filtered, page, pageSize],
+  );
 
   async function handleDelete() {
     if (!toDelete) return;
@@ -125,7 +137,7 @@ export function InventoryPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((item) => (
+            {paginated.map((item) => (
               <tr
                 key={item.id}
                 className={`border-b border-theme-border last:border-0 hover:bg-theme-hover ${!item.active ? "opacity-60" : ""}`}
@@ -194,6 +206,18 @@ export function InventoryPage() {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={filtered.length}
+        onPageChange={setPage}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPage(0);
+        }}
+      />
 
       {editing && (
         <ItemFormModal

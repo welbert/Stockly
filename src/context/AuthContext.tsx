@@ -1,7 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import * as api from "../lib/api";
 import type { UserProfile } from "../lib/api";
-import { logger } from "../logger";
+import { logger, setLoggerUser } from "../logger";
 
 interface AuthContextValue {
   user: UserProfile | null;
@@ -24,6 +24,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch((err) => logger.error("falha ao verificar sessão ativa", err))
       .finally(() => setLoading(false));
   }, []);
+
+  // Kept separate from the fetch above so it stays correct regardless of
+  // *how* `user` changed — `login()`/`logout()` below, or the raw `setUser()`
+  // some pages call directly (e.g. after changing theme/auto-lock).
+  useEffect(() => {
+    setLoggerUser(user ? { id: user.id, name: user.name } : null);
+  }, [user]);
 
   async function login(userId: number, password: string) {
     const profile = await api.login(userId, password);

@@ -5,7 +5,12 @@ export async function call<T>(command: string, args?: Record<string, unknown>): 
   try {
     return await invoke<T>(command, args);
   } catch (err) {
-    logger.error(`invoke ${command} falhou`, err);
+    // `userId` shows up here for commands acting on/authenticating a specific
+    // profile (login, verifyPassword, updateUser, deleteUser, ...) — the one
+    // way to tell *who* a failed login attempt was for, since there's no
+    // active session yet for the logger's own `[user ...]` tag to reflect.
+    const target = typeof args?.userId === "number" ? ` (userId=${args.userId})` : "";
+    logger.error(`invoke ${command} falhou${target}`, err);
     throw err;
   }
 }
@@ -269,9 +274,27 @@ export type SaleDetail = {
   /** Amount of the Crediário debt already paid off at sale time, if any —
    * `null` when nothing was paid up front (the whole `total` is open balance). */
   creditPaidNow: number | null;
+  /** The three `cancel*` fields below are only set once the sale has been
+   * cancelled/estornada — never deleted, see `cancelSale`. */
+  cancelledAt: string | null;
+  cancelledByName: string | null;
+  cancelAuthorizedByName: string | null;
   createdAt: string;
   items: SaleItemDetail[];
   receiptPdfPath: string | null;
+};
+
+/** Lightweight row for the Histórico de vendas listing (no line items — those
+ * are a separate `getSaleDetail` round-trip once a sale is opened). */
+export type SaleListItem = {
+  id: number;
+  receiptNumber: string;
+  createdAt: string;
+  userName: string;
+  clientName: string | null;
+  paymentMethod: PaymentMethod;
+  total: number;
+  status: string;
 };
 
 /** Arredondamento pra 2 casas decimais — mesma regra do `money::round2` no
@@ -300,6 +323,19 @@ export function getSaleDetail(saleId: number) {
   return call<SaleDetail>("get_sale_detail", { saleId });
 }
 
+/** Every sale ever, newest first — frontend filters by date range/receipt/
+ * cliente/operador client-side, same convention as `listItems`/`listClients`. */
+export function listSales() {
+  return call<SaleListItem[]>("list_sales");
+}
+
+/** Cancels/reverses a completed sale — reverses stock and, for a Crediário
+ * sale, the client's open balance too. Same admin-authorization shape as
+ * `createSale`'s discount fields. */
+export function cancelSale(input: { saleId: number; authorizerId: number | null; authorizerPassword: string | null }) {
+  return call<SaleDetail>("cancel_sale", input);
+}
+
 export function regenerateReceiptPdf(saleId: number) {
   return call<string>("regenerate_receipt_pdf", { saleId });
 }
@@ -312,13 +348,17 @@ export function openReceiptsFolder() {
   return call<void>("open_receipts_folder");
 }
 
+export function openLogDir() {
+  return call<void>("open_log_dir");
+}
+
 export type ClientSummary = {
   id: number;
   name: string;
   phone: string | null;
   reminderDate: string | null;
   note: string | null;
-  /** Saldo em Crediário em aberto — vendas creditadas menos pagamentos já registrados. */
+  /** Open Crediário balance — credited sales minus payments already registered. */
   balance: number;
 };
 
@@ -327,6 +367,8 @@ export type CreditSaleSummary = {
   receiptNumber: string;
   createdAt: string;
   total: number;
+  /** `"completed"` or `"cancelled"`. */
+  status: string;
 };
 
 export type CreditPaymentSummary = {
@@ -334,7 +376,7 @@ export type CreditPaymentSummary = {
   amount: number;
   userName: string;
   createdAt: string;
-  /** Só preenchidos quando o pagamento foi cancelado (soft-cancel, nunca apagado). */
+  /** Only filled in once the payment has been cancelled (soft-cancel, never deleted). */
   cancelledAt: string | null;
   cancelledByName: string | null;
   cancelAuthorizedByName: string | null;
@@ -346,9 +388,9 @@ export type ClientDetail = ClientSummary & {
   payments: CreditPaymentSummary[];
 };
 
-/** Todos os clientes, cada um já com o saldo calculado — filtragem/ordenação
- * (ex.: só devedores com saldo > 0, busca por nome) acontece no frontend,
- * mesmo padrão de `listItems`. */
+/** Every client, each already with its computed balance — filtering/sorting
+ * (e.g. only debtors with balance > 0, search by name) happens in the
+ * frontend, same convention as `listItems`. */
 export function listClients() {
   return call<ClientSummary[]>("list_clients");
 }
@@ -380,9 +422,9 @@ export function registerCreditPayment(clientId: number, amount: number) {
   return call<ClientDetail>("register_credit_payment", { clientId, amount });
 }
 
-/** Soft-cancel — não apaga o pagamento, marca com motivo. Reverte um valor
- * financeiro, então exige autorização de administrador (mesmo padrão de
- * `createSale`'s discount/cancel authorization). */
+/** Soft-cancel — doesn't delete the payment, just marks it with a reason.
+ * Reverses a financial entry, so it requires admin authorization (same
+ * pattern as `createSale`'s discount/cancel authorization). */
 export function cancelCreditPayment(input: {
   paymentId: number;
   reason: string;

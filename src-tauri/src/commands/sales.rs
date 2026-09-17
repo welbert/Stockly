@@ -1,5 +1,5 @@
 use crate::guard::{active_user_id, resolve_admin_authorization};
-use crate::models::{SaleDetail, SaleItemDetail, SaleItemInput};
+use crate::models::{SaleDetail, SaleItemDetail, SaleItemInput, SaleListItem};
 use crate::money::round2;
 use crate::AppState;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -112,6 +112,9 @@ pub(crate) fn fetch_sale_detail(
         status,
         client_id,
         client_name,
+        cancelled_at,
+        cancelled_by_name,
+        cancel_authorized_by_name,
         created_at,
     ): (
         String,
@@ -125,14 +128,19 @@ pub(crate) fn fetch_sale_detail(
         String,
         Option<i64>,
         Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
         String,
     ) = conn
         .query_row(
-            "SELECT s.receipt_number, s.user_id, u.name, s.subtotal, s.discount_percent, s.discount_amount, a.name, s.total, s.status, s.client_id, c.name, s.created_at
+            "SELECT s.receipt_number, s.user_id, u.name, s.subtotal, s.discount_percent, s.discount_amount, a.name, s.total, s.status, s.client_id, c.name, s.cancelled_at, cb.name, ca.name, s.created_at
              FROM sales s
              JOIN users u ON u.id = s.user_id
              LEFT JOIN users a ON a.id = s.discount_authorized_by_user_id
              LEFT JOIN clients c ON c.id = s.client_id
+             LEFT JOIN users cb ON cb.id = s.cancelled_by_user_id
+             LEFT JOIN users ca ON ca.id = s.cancel_authorized_by_user_id
              WHERE s.id = ?1",
             params![sale_id],
             |row| {
@@ -149,6 +157,9 @@ pub(crate) fn fetch_sale_detail(
                     row.get(9)?,
                     row.get(10)?,
                     row.get(11)?,
+                    row.get(12)?,
+                    row.get(13)?,
+                    row.get(14)?,
                 ))
             },
         )
@@ -186,6 +197,9 @@ pub(crate) fn fetch_sale_detail(
         client_id,
         client_name,
         credit_paid_now,
+        cancelled_at,
+        cancelled_by_name,
+        cancel_authorized_by_name,
         created_at,
         items,
         receipt_pdf_path,
@@ -198,6 +212,113 @@ pub(crate) fn fetch_sale_detail(
 pub fn get_sale_detail(state: State<AppState>, sale_id: i64) -> Result<SaleDetail, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     active_user_id(&state)?;
+    fetch_sale_detail(&conn, sale_id, None)
+}
+
+/// Every sale ever, newest first — any logged-in profile. Frontend filters by
+/// date range/receipt/cliente/operador client-side (same "fetch everything,
+/// filter in the component" convention as Estoque/Devedores). Line items
+/// aren't included here — that's a separate `get_sale_detail` round-trip once
+/// a specific sale is opened, so this listing stays light even as sales pile
+/// up over time.
+#[tauri::command]
+pub fn list_sales(state: State<AppState>) -> Result<Vec<SaleListItem>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    active_user_id(&state)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT s.id, s.receipt_number, s.created_at, u.name, c.name, sp.payment_method, s.total, s.status
+             FROM sales s
+             JOIN users u ON u.id = s.user_id
+             LEFT JOIN clients c ON c.id = s.client_id
+             JOIN sale_payments sp ON sp.sale_id = s.id
+             ORDER BY s.created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(SaleListItem {
+                id: row.get(0)?,
+                receipt_number: row.get(1)?,
+                created_at: row.get(2)?,
+                user_name: row.get(3)?,
+                client_name: row.get(4)?,
+                payment_method: row.get(5)?,
+                total: row.get(6)?,
+                status: row.get(7)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Cancels/estorna a completed sale — never deletes it, flips `status` to
+/// `cancelled` and fills the `cancelled_*`/`cancel_authorized_*` columns.
+/// Same admin-authorization pattern as discount/cancel-payment
+/// (`resolve_admin_authorization`): self-authorizes if the active session is
+/// already Admin, otherwise needs a *different* admin's password. Reverses
+/// the stock decrement (`refund`-type `stock_movements` rows) for every line
+/// whose item still exists, and — if this was a Crediário sale with a "Valor
+/// pago agora" down payment — soft-cancels that `credit_payments` row too, so
+/// the client's balance calculation (which only sums `completed` sales) isn't
+/// left double-crediting a payment for a debt that no longer exists.
+#[tauri::command]
+pub fn cancel_sale(
+    state: State<AppState>,
+    sale_id: i64,
+    authorizer_id: Option<i64>,
+    authorizer_password: Option<String>,
+) -> Result<SaleDetail, String> {
+    let mut conn = state.db.lock().map_err(|e| e.to_string())?;
+    let requester_id = active_user_id(&state)?;
+
+    let status: String = conn
+        .query_row("SELECT status FROM sales WHERE id = ?1", params![sale_id], |row| row.get(0))
+        .map_err(|_| "Venda não encontrada".to_string())?;
+    if status != "completed" {
+        return Err("Venda já está cancelada".to_string());
+    }
+
+    let authorized_by = resolve_admin_authorization(&state, &conn, authorizer_id, authorizer_password.as_deref())?;
+
+    {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+        let items: Vec<(i64, i64)> = {
+            let mut stmt = tx
+                .prepare("SELECT item_id, quantity FROM sale_items WHERE sale_id = ?1 AND item_id IS NOT NULL")
+                .map_err(|e| e.to_string())?;
+            let rows = stmt.query_map(params![sale_id], |row| Ok((row.get(0)?, row.get(1)?))).map_err(|e| e.to_string())?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+        };
+        for (item_id, quantity) in items {
+            tx.execute("UPDATE items SET quantity = quantity + ?1 WHERE id = ?2", params![quantity, item_id])
+                .map_err(|e| e.to_string())?;
+            tx.execute(
+                "INSERT INTO stock_movements (item_id, movement_type, quantity_delta, sale_id, user_id) VALUES (?1, 'refund', ?2, ?3, ?4)",
+                params![item_id, quantity, sale_id, requester_id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+
+        tx.execute(
+            "UPDATE sales SET status = 'cancelled', cancelled_at = datetime('now'), cancelled_by_user_id = ?1, cancel_authorized_by_user_id = ?2 WHERE id = ?3",
+            params![requester_id, authorized_by, sale_id],
+        )
+        .map_err(|e| e.to_string())?;
+
+        tx.execute(
+            "UPDATE credit_payments
+             SET cancelled_at = datetime('now'), cancelled_by_user_id = ?1, cancel_authorized_by_user_id = ?2,
+                 cancel_reason = 'Estorno da venda que gerou este pagamento'
+             WHERE sale_id = ?3 AND cancelled_at IS NULL",
+            params![requester_id, authorized_by, sale_id],
+        )
+        .map_err(|e| e.to_string())?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
     fetch_sale_detail(&conn, sale_id, None)
 }
 

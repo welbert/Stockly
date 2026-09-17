@@ -5,6 +5,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { DevedoresPage } from "./pages/DevedoresPage";
 import { InventoryPage } from "./pages/InventoryPage";
+import { SalesHistoryPage } from "./pages/SalesHistoryPage";
 import { SalesPage } from "./pages/SalesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { UsersPage } from "./pages/UsersPage";
@@ -20,6 +21,7 @@ function App() {
                 <Route index element={<InventoryPage />} />
                 <Route path="venda" element={<SalesPage />} />
                 <Route path="devedores" element={<DevedoresPage />} />
+                <Route path="historico" element={<SalesHistoryPage />} />
                 <Route path="configuracoes" element={<SettingsPage />} />
                 <Route path="usuarios" element={<UsersPage />} />
               </Route>

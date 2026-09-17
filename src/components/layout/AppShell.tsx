@@ -2,6 +2,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { getStoreName } from "../../lib/api";
 import { logger } from "../../logger";
 import type { AuthGateOutletContext } from "./AuthGate";
 
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { to: "/venda", label: "Venda (PDV)", icon: "🛒", adminOnly: false, group: () => "Operação" },
   { to: "/", label: "Estoque", icon: "📦", adminOnly: false, group: () => "Operação" },
   { to: "/devedores", label: "Devedores", icon: "💳", adminOnly: false, group: () => "Operação" },
+  { to: "/historico", label: "Histórico de vendas", icon: "🧾", adminOnly: false, group: () => "Operação" },
   { to: "/usuarios", label: "Usuários", icon: "👤", adminOnly: true, group: () => "Administração" },
   {
     to: "/configuracoes",
@@ -36,6 +38,7 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Estoque", subtitle: "Itens cadastrados e categorias" },
   "/venda": { title: "Venda (PDV)", subtitle: "Registro rápido de venda, otimizado para teclado" },
   "/devedores": { title: "Devedores (Crediário)", subtitle: "Saldo em aberto, histórico de vendas fiado e pagamentos por cliente" },
+  "/historico": { title: "Histórico de vendas", subtitle: "Busca por recibo, cliente ou operador, e cancelamento/estorno" },
   "/configuracoes": { title: "Configurações", subtitle: "Tema e bloqueio automático" },
   "/usuarios": { title: "Usuários", subtitle: "Gestão de administradores e usuários" },
 };
@@ -46,11 +49,17 @@ export function AppShell() {
   const navigate = useNavigate();
   const { secondsUntilLock } = useOutletContext<AuthGateOutletContext>();
   const [version, setVersion] = useState<string | null>(null);
+  const [storeName, setStoreName] = useState("");
 
   useEffect(() => {
     getVersion()
       .then(setVersion)
       .catch((err) => logger.error("falha ao ler a versão do app", err));
+    // Fetched once per session (same as version) — a store name changed in
+    // Configurações only shows up here after the app restarts.
+    getStoreName()
+      .then(setStoreName)
+      .catch((err) => logger.error("falha ao ler nome da loja", err));
   }, []);
 
   useEffect(() => {
@@ -73,7 +82,7 @@ export function AppShell() {
       <aside className="flex h-full flex-col gap-1 overflow-y-auto bg-sidebar-bg p-4 text-sidebar-text">
         <div className="mb-4 flex items-center gap-2 px-1 text-sm font-bold text-white">
           <span className="h-2.5 w-2.5 rounded-sm bg-gradient-to-br from-primary to-primary-hover" />
-          Bora Vender
+          {storeName || "Bora Vender"}
         </div>
 
         <nav className="flex flex-1 flex-col gap-1">
@@ -127,7 +136,7 @@ export function AppShell() {
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-sidebar-text">
-            <span>{version ? `v${version}` : ""}</span>
+            <span>{version ? `Stockly - v${version}` : ""}</span>
             <button onClick={logout} className="text-sidebar-text hover:text-white">
               Sair
             </button>

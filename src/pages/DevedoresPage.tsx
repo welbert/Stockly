@@ -8,11 +8,14 @@ import { Card } from "../components/Card";
 import { Checkbox } from "../components/Checkbox";
 import { ClientFormModal } from "../components/ClientFormModal";
 import { CreditPaymentModal } from "../components/CreditPaymentModal";
+import { Pagination } from "../components/Pagination";
 import { SaleDetailModal } from "../components/SaleDetailModal";
 import { fmt, fmtDate, fmtDateFull, fmtDateTime, normalize } from "../lib/format";
 import { logger } from "../logger";
 
 type SortBy = "reminder" | "name" | "balance";
+
+const HISTORY_PAGE_SIZE = 5;
 
 /** Reminders inside this window get the yellow "coming up" badge; anything
  * further out (or without a date) is plain text — v1 threshold, not spelled
@@ -47,6 +50,8 @@ export function DevedoresPage() {
   const [showSettled, setShowSettled] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selected, setSelected] = useState<ClientDetail | null>(null);
+  const [creditSalesPage, setCreditSalesPage] = useState(0);
+  const [paymentsPage, setPaymentsPage] = useState(0);
   const [editing, setEditing] = useState<ClientSummary | "new" | null>(null);
   const [paying, setPaying] = useState<ClientSummary | null>(null);
   const [viewingSaleId, setViewingSaleId] = useState<number | null>(null);
@@ -66,6 +71,8 @@ export function DevedoresPage() {
   }, []);
 
   useEffect(() => {
+    setCreditSalesPage(0);
+    setPaymentsPage(0);
     if (selectedId === null) {
       setSelected(null);
       return;
@@ -100,6 +107,24 @@ export function DevedoresPage() {
   const totalOpen = useMemo(() => debtors.reduce((sum, c) => sum + c.balance, 0), [debtors]);
   const overdueCount = useMemo(() => debtors.filter((c) => c.reminderDate && daysUntil(c.reminderDate) < 0).length, [debtors]);
 
+  // Both histories already come back newest-first from the backend, so a
+  // plain slice is enough — no re-sorting needed here.
+  const pagedCreditSales = useMemo(
+    () => selected?.creditSales.slice(creditSalesPage * HISTORY_PAGE_SIZE, (creditSalesPage + 1) * HISTORY_PAGE_SIZE) ?? [],
+    [selected, creditSalesPage],
+  );
+  const pagedPayments = useMemo(
+    () => selected?.payments.slice(paymentsPage * HISTORY_PAGE_SIZE, (paymentsPage + 1) * HISTORY_PAGE_SIZE) ?? [],
+    [selected, paymentsPage],
+  );
+
+  function reloadSelected() {
+    if (selectedId === null) return;
+    getClientDetail(selectedId)
+      .then(setSelected)
+      .catch((err) => logger.error("falha ao recarregar detalhe do devedor", err));
+  }
+
   function handleClientSaved(client: ClientSummary) {
     setEditing(null);
     reloadList();
@@ -107,9 +132,7 @@ export function DevedoresPage() {
       // `setSelectedId` with the same id doesn't re-trigger the effect that
       // fetches the detail (React bails out, same value) — without this,
       // editing the already-selected debtor left `selected` with stale data.
-      getClientDetail(client.id)
-        .then(setSelected)
-        .catch((err) => logger.error("falha ao recarregar detalhe do devedor", err));
+      reloadSelected();
     } else {
       setSelectedId(client.id);
     }
@@ -221,17 +244,27 @@ export function DevedoresPage() {
                   <th className="py-2">Recibo</th>
                   <th className="py-2">Data</th>
                   <th className="py-2">Valor</th>
+                  <th className="py-2">Status</th>
                   <th className="py-2" />
                 </tr>
               </thead>
               <tbody>
-                {selected.creditSales.map((s) => (
+                {pagedCreditSales.map((s) => (
                   <tr key={s.saleId} className="border-b border-theme-border last:border-0">
                     <td className="py-2">
                       <code className="text-xs">{s.receiptNumber}</code>
                     </td>
                     <td className="py-2 text-theme-1">{fmtDateTime(s.createdAt)}</td>
-                    <td className="py-2 text-theme-1">{fmt(s.total)}</td>
+                    <td className={`py-2 ${s.status === "cancelled" ? "text-theme-3 line-through" : "text-theme-1"}`}>
+                      {fmt(s.total)}
+                    </td>
+                    <td className="py-2">
+                      {s.status === "cancelled" ? (
+                        <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">Cancelada</span>
+                      ) : (
+                        <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold text-success">Concluída</span>
+                      )}
+                    </td>
                     <td className="py-2 text-right">
                       <Button variant="ghost" onClick={() => setViewingSaleId(s.saleId)}>
                         Ver venda
@@ -241,15 +274,16 @@ export function DevedoresPage() {
                 ))}
                 {selected.creditSales.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-3 text-center text-theme-3">
+                    <td colSpan={5} className="py-3 text-center text-theme-3">
                       Nenhuma venda em Crediário ainda.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+            <Pagination page={creditSalesPage} pageSize={HISTORY_PAGE_SIZE} total={selected.creditSales.length} onPageChange={setCreditSalesPage} />
 
-            <div className="mb-1.5 text-xs font-semibold text-theme-3">Pagamentos registrados</div>
+            <div className="mb-1.5 mt-4 text-xs font-semibold text-theme-3">Pagamentos registrados</div>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-border text-left text-xs uppercase tracking-wide text-theme-3">
@@ -260,7 +294,7 @@ export function DevedoresPage() {
                 </tr>
               </thead>
               <tbody>
-                {selected.payments.map((p) => (
+                {pagedPayments.map((p) => (
                   <tr key={p.id} className="border-b border-theme-border last:border-0">
                     <td className="py-2 text-theme-1">{fmtDateTime(p.createdAt)}</td>
                     <td className={`py-2 ${p.cancelledAt ? "text-theme-3 line-through" : "text-theme-1"}`}>{fmt(p.amount)}</td>
@@ -291,6 +325,7 @@ export function DevedoresPage() {
                 )}
               </tbody>
             </table>
+            <Pagination page={paymentsPage} pageSize={HISTORY_PAGE_SIZE} total={selected.payments.length} onPageChange={setPaymentsPage} />
           </Card>
         ) : (
           <Card>
@@ -314,6 +349,7 @@ export function DevedoresPage() {
           onSaved={(updated) => {
             setPaying(null);
             reloadList();
+            setPaymentsPage(0); // jump back to the newest page so the payment just registered is visible
             // A full payoff drops out of the left list (unless "Mostrar
             // quitados" is on) — the detail on the right needs to clear too
             // in that case, or it'd keep showing the debtor view of a client
@@ -325,7 +361,18 @@ export function DevedoresPage() {
         />
       )}
 
-      {viewingSaleId !== null && <SaleDetailModal saleId={viewingSaleId} onClose={() => setViewingSaleId(null)} />}
+      {viewingSaleId !== null && (
+        <SaleDetailModal
+          saleId={viewingSaleId}
+          admins={admins}
+          requiresAuth={!user.isAdmin}
+          onClose={() => setViewingSaleId(null)}
+          onCancelled={() => {
+            reloadList();
+            reloadSelected();
+          }}
+        />
+      )}
 
       {cancelingPayment && (
         <CancelCreditPaymentModal

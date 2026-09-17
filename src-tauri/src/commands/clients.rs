@@ -157,7 +157,7 @@ fn fetch_client_detail(conn: &Connection, id: i64) -> Result<ClientDetail, Strin
     let credit_sales = {
         let mut stmt = conn
             .prepare(
-                "SELECT s.id, s.receipt_number, s.created_at, s.total FROM sales s
+                "SELECT s.id, s.receipt_number, s.created_at, s.total, s.status FROM sales s
                  JOIN sale_payments sp ON sp.sale_id = s.id
                  WHERE sp.payment_method = 'credit' AND s.client_id = ?1
                  ORDER BY s.created_at DESC",
@@ -165,7 +165,13 @@ fn fetch_client_detail(conn: &Connection, id: i64) -> Result<ClientDetail, Strin
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map(params![id], |row| {
-                Ok(CreditSaleSummary { sale_id: row.get(0)?, receipt_number: row.get(1)?, created_at: row.get(2)?, total: row.get(3)? })
+                Ok(CreditSaleSummary {
+                    sale_id: row.get(0)?,
+                    receipt_number: row.get(1)?,
+                    created_at: row.get(2)?,
+                    total: row.get(3)?,
+                    status: row.get(4)?,
+                })
             })
             .map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?

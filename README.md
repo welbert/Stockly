@@ -1,4 +1,4 @@
-# Bora Vender
+# Bora Vender (Stockly)
 
 App desktop de controle de estoque e vendas (PDV) para uso local em um único computador — sem nuvem, sem sincronização, sem telemetria. Pensado para o dia a dia de um pequeno comércio: cadastrar itens, vender rápido (principalmente via teclado) e acompanhar o que entra e sai do caixa.
 
@@ -13,6 +13,7 @@ App desktop de controle de estoque e vendas (PDV) para uso local em um único co
 - **Relatórios** — vendas por período, por categoria/item, e margem de lucro
 - **Backup automático do banco** — ao abrir o app e a cada 10 minutos, sem precisar de ação manual
 - **Atualização automática** — o app verifica e instala novas versões sozinho
+- **Nome da loja personalizável** — aparece na sidebar e no cabeçalho do recibo em PDF, com fallback pro padrão do app quando não configurado
 - **Tema claro/escuro**
 
 ## Instalação

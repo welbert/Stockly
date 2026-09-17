@@ -13,7 +13,9 @@ Every command locks `AppState.db` (a `Mutex<Connection>` — single connection, 
 
 ## Data directory
 
-`app.path().app_data_dir()` (Tauri's per-OS app data folder, keyed by the `identifier` in `tauri.conf.json`) — on Windows, `%APPDATA%\com.welbert.stockly\`. The database file is `stockly.db` inside it (`lib.rs`'s `setup` hook). Logs go to the sibling `app_log_dir()` (`commands::logging`).
+`app.path().app_data_dir()` (Tauri's per-OS app data folder, keyed by the `identifier` in `tauri.conf.json`) — on Windows, `%APPDATA%\com.welbert.stockly\`. The database file is `stockly.db` inside it (`lib.rs`'s `setup` hook). Logs go to the sibling `app_log_dir()` (`commands::logging`), reachable in the UI via Configurações' "Diagnóstico" card.
+
+Every line `src/logger.ts` sends is tagged `[user id:name]` (or `[no session]` before any login) — `AuthContext` keeps this in sync with whoever's actually logged in (see `docs/frontend.md`), and `lib/api.ts`'s `call()` additionally appends `(userId=N)` on a failed invoke whose args carry a `userId`, since that covers the one gap the tag can't: a *failed login attempt*, logged before any session exists to tag. Without either, a log a user forwards (e.g. "invoke login falhou") couldn't be traced back to which profile it was about.
 
 ## `AppState`
 

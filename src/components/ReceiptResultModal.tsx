@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
 import type { SaleDetail } from "../lib/api";
 import { openReceiptsFolder, printFile, regenerateReceiptPdf } from "../lib/api";
-import { fmt, fmtDateTime } from "../lib/format";
+import { PAYMENT_METHOD_LABEL, fmt, fmtDateTime } from "../lib/format";
 import { Button } from "./Button";
 import { Kbd } from "./Kbd";
 import { Modal } from "./Modal";
 import { logger } from "../logger";
-
-const PAYMENT_LABEL: Record<string, string> = { cash: "Dinheiro", card: "Cartão", pix: "PIX", credit: "Crediário" };
 
 interface ReceiptResultModalProps {
   sale: SaleDetail;
@@ -146,7 +144,7 @@ export function ReceiptResultModal({ sale, storeName, storeInfo, thankYouMessage
           <p className="mt-1 italic text-theme-3">Descontos autorizados por: {sale.discountAuthorizedByName}</p>
         )}
         <hr className="my-2 border-dashed border-theme-border" />
-        <div className="text-center">Forma de pagamento: {PAYMENT_LABEL[sale.paymentMethod] ?? sale.paymentMethod}</div>
+        <div className="text-center">Forma de pagamento: {PAYMENT_METHOD_LABEL[sale.paymentMethod] ?? sale.paymentMethod}</div>
         <div className="mt-1 text-center">{thankYouMessage}</div>
       </div>
 

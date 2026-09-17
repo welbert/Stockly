@@ -29,3 +29,7 @@ export function normalize(text: string): string {
     .replace(/\p{Mn}/gu, "")
     .toLowerCase();
 }
+
+/** Payment method label shown on the receipt preview, "Ver venda" and
+ * Histórico de vendas — shared here so the three don't drift apart. */
+export const PAYMENT_METHOD_LABEL: Record<string, string> = { cash: "Dinheiro", card: "Cartão", pix: "PIX", credit: "Crediário" };
