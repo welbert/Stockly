@@ -1,0 +1,79 @@
+@import "tailwindcss";
+@import "react-grid-layout/css/styles.css";
+
+/*
+ * Paleta índigo (mesma cor primária do ícone/mockups). Dois temas apenas
+ * ("light" é o padrão, refletindo os mockups; "dark" inverte os neutros
+ * mantendo o índigo como destaque) — tokens neutros redefinidos por tema,
+ * mapeados para utilitários `bg-theme-*`/`text-theme-*` via @theme abaixo.
+ */
+
+:root {
+  --theme-bg:      #f4f5f7;
+  --theme-surface: #ffffff;
+  --theme-raised:  #f1f3f6;
+  --theme-hover:   #e3e6eb;
+  --theme-border:  #e3e6eb;
+  --theme-1:       #1b2130;
+  --theme-2:       #4b5262;
+  --theme-3:       #6b7280;
+  --theme-4:       #9aa1ad;
+
+  --color-primary:      #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-soft:  #eef0fd;
+  --color-success:      #16a34a;
+  --color-danger:       #dc2626;
+  --color-warning:      #d97706;
+  --color-info:         #0891b2;
+}
+
+[data-theme="dark"] {
+  --theme-bg:      #0f1016;
+  --theme-surface: #171821;
+  --theme-raised:  #1e2029;
+  --theme-hover:   #262835;
+  --theme-border:  rgba(255, 255, 255, 0.08);
+  --theme-1:       #f0f0f2;
+  --theme-2:       #c7c7cd;
+  --theme-3:       #9d9da5;
+  --theme-4:       #68686f;
+
+  --color-primary:      #818cf8;
+  --color-primary-hover: #6366f1;
+  --color-primary-soft:  #1e2145;
+}
+
+@theme inline {
+  --color-theme-bg:      var(--theme-bg);
+  --color-theme-surface: var(--theme-surface);
+  --color-theme-raised:  var(--theme-raised);
+  --color-theme-hover:   var(--theme-hover);
+  --color-theme-border:  var(--theme-border);
+  --color-theme-1:       var(--theme-1);
+  --color-theme-2:       var(--theme-2);
+  --color-theme-3:       var(--theme-3);
+  --color-theme-4:       var(--theme-4);
+
+  --color-primary:       var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-soft:  var(--color-primary-soft);
+  --color-success:       var(--color-success);
+  --color-danger:        var(--color-danger);
+  --color-warning:       var(--color-warning);
+  --color-info:          var(--color-info);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+    background: var(--theme-bg);
+    color: var(--theme-1);
+  }
+}
