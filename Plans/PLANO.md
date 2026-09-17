@@ -375,5 +375,5 @@ Cards candidatos para o catálogo inicial do Stockly:
    4. Crediário e Devedores — depende de Venda já funcionando (forma de pagamento).
    5. Dashboard e Relatórios — depende de ter dado de venda acumulado pra mostrar algo.
    6. Backup, autoupdate, CSV — funcionalidades de apoio, não bloqueiam nada acima.
-5. Criar a documentação técnica em `docs/` (architecture, database, commands, frontend) conforme o projeto avança — em andamento: `database.md` e `commands.md` já existem; `architecture.md`/`frontend.md` ficam para quando essas camadas crescerem o suficiente.
+5. ~~Criar a documentação técnica em `docs/` (architecture, database, commands, frontend) conforme o projeto avança.~~ — **concluído**: `architecture.md`, `frontend.md`, `database.md` e `commands.md` já existem (mais `future.md`, pra ideias fora do escopo atual); seguem sendo atualizados a cada fatia nova.
 6. Decidir se o repositório do Stockly será **público** (necessário para o autoupdate single-repo funcionar) ou se vai precisar do esquema de repositório de releases separado — ver seção "Autoupdate".

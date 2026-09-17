@@ -37,6 +37,10 @@ The **backend is the real access boundary**, not the UI hiding a button. Every a
 
 **Every R$ value input uses `MoneyInput`** (`src/components/MoneyInput.tsx`) — never a raw `<input type="number">`. Ported from the sibling project's component of the same name: each digit typed enters from the right, like a POS/ATM ("1" → R$ 0,01, one more "0" → R$ 0,10), rather than typing left-to-right and hoping the decimal point lands right. Its `value`/`onChange` are already a plain `number` in reais — no string parsing at the call site (see `ItemFormModal`'s `costPrice`/`salePrice`).
 
+## Form-modal rule
+
+**Closing a form modal with unsaved input asks first.** Every form modal (`ItemFormModal`, `UserFormModal`) computes a `dirty` flag (current field values vs. the `initial` prop) and routes backdrop-click/✕/Cancelar through a `requestClose()` function — closes right away when `!dirty`, otherwise opens a `ConfirmModal` ("Descartar alterações?") first. Apply the same to any new form modal rather than wiring `Modal`'s `onClose` straight to the parent's close handler; it's an easy thing to forget since a modal closes without it too, just silently loses whatever was typed. Implementation details (exactly how `dirty` is computed) are in `docs/frontend.md`, not repeated here.
+
 ## Versioning rule
 
 **When bumping the version, update all 3 files in sync** — they always need to match: `package.json` (`"version"`), `src-tauri/Cargo.toml` (`version`), `src-tauri/tauri.conf.json` (`"version"`).
@@ -119,8 +123,11 @@ Stockly/
 │   ├── tauri.conf.json          # identifier com.welbert.stockly, productName "Bora Vender"
 │   └── capabilities/default.json
 ├── docs/
-│   ├── database.md              # full schema, table by table
-│   └── commands.md              # every Tauri command, by domain, with signature
+│   ├── architecture.md           # layers, AppState, session model, guard.rs
+│   ├── frontend.md               # routing, pages, key components, context/hooks
+│   ├── database.md               # full schema, table by table
+│   ├── commands.md               # every Tauri command, by domain, with signature
+│   └── future.md                 # out-of-scope ideas/gaps — outlives Plans/PLANO.md
 └── icon-source.png / icon.ico    # master icon assets (see Environment notes)
 ```
 
@@ -128,22 +135,13 @@ Stockly/
 
 | File | Content |
 |---|---|
+| [docs/architecture.md](docs/architecture.md) | Layers, data flow, `AppState`, session model, `guard.rs`, command module list |
+| [docs/frontend.md](docs/frontend.md) | Routing, pages, key components, context/hooks |
 | [docs/database.md](docs/database.md) | Full SQLite schema, table by table, with the design rationale behind each nullable/cascade/check |
 | [docs/commands.md](docs/commands.md) | Every Tauri command, by domain, with signature |
 | [docs/future.md](docs/future.md) | Ideas/gaps noticed along the way but out of scope for now — outlives `Plans/PLANO.md` |
 
-More docs (architecture, frontend) will be added here as those layers grow enough to need one.
-
-## Current state
-
-Auth (step 4.1) and Estoque (step 4.2, itens/categorias) both done, on top of the scaffold + schema from before. Vendas/Crediário/Dashboard/Relatórios are still unimplemented. CSV import/export and backup/autoupdate are deliberately deferred (PLANO.md's step 6, "funcionalidades de apoio") — the Estoque screen has no CSV buttons yet, that's expected, not a gap.
-
-- **Backend — auth**: `commands::auth` (`login`, `logout`, `get_active_user`, `verify_password`) and `commands::users` (`has_any_users`, `list_login_profiles`, `list_users`, `create_user`, `update_user`, `delete_user`, `update_theme`, `update_my_auto_lock`). Passwords hashed with `bcrypt`. `AppState.active_user_id: Mutex<Option<i64>>` holds the in-memory session (never persisted — a process restart always shows the login screen again, unlike CashVault's "remembered profile"). `users.username` is never a form field or an argument the frontend supplies — it's auto-derived from `name` (`slugify`/`unique_username` in `commands/users.rs`) and excluded from `UserProfile` entirely (see `docs/database.md`).
-- **Backend — estoque**: `commands::categories` (full CRUD, Admin-only) and `commands::items` (`list_items`, `create_item`, `update_item`, `delete_item`, `add_stock_entry`, `deactivate_item`) plus `commands::config` (`get_low_stock_percent`/`set_low_stock_percent`, `get_default_profit_margin`/`set_default_profit_margin`) — see `docs/commands.md`. `require_admin`/`user_is_admin`/`active_user_id` now live in `src-tauri/src/guard.rs`, shared across command modules instead of duplicated (was private to `commands/users.rs` during the auth slice).
-- **Frontend — auth**: `LoginPage` (first-run admin creation form **or** profile-picker + password, keyboard-navigable), `AppShell` (sidebar + topbar, nav items filtered by `user.isAdmin`), `SettingsPage` (theme + auto-lock dropdown + Admin-only low-stock percent), `UsersPage` (Admin-only CRUD table + `UserFormModal`), `LockScreen` (auto-lock overlay, triggered by `useIdleTimer`). `AuthContext`/`ThemeContext` wrap everything in `App.tsx`. `AuthGate` owns the single `useIdleTimer` call and passes `secondsUntilLock` down to `AppShell`'s topbar warning via `<Outlet context={...}>`/`useOutletContext` (`AuthGateOutletContext`) — deliberately not a React Context module, since it's one value flowing to one child route tree.
-- **Frontend — estoque**: `InventoryPage` (now the app's index route `/`) — search/category filter, `StockBadge` chip computed client-side from `min_quantity` + the global percent (`stockStatus()` in `lib/api.ts`), dimmed row + "Inativo" badge instead of the stock chip when `!item.active`. Admin sees "Editar"/"Excluir" (`ItemFormModal`, full CRUD incl. `quantity` = inventory correction, plus `CategoryManagerModal` reachable from within it); Usuário comum sees "Ajustar estoque" for active items only (`StockAdjustModal` — add-stock entry and deactivate only, matching the mockup's explicit note that hard-delete/reactivate/CSV stay Admin-only). On item creation, `sale_price` is pre-filled from `cost_price * (1 + default_profit_margin_percent / 100)` (`suggestedSalePrice` in `lib/api.ts`) and keeps recalculating as `cost_price` changes — only until the admin edits `sale_price` by hand (`salePriceTouched` in `ItemFormModal`), never on an existing item. **Form-modal convention** (`ItemFormModal`, `UserFormModal`): a `dirty` flag (current field values vs. the `initial` prop) gates closing — backdrop click/✕/Cancelar go through `requestClose()`, which asks via `ConfirmModal` instead of closing outright when there's unsaved input; apply the same to new form modals rather than closing unconditionally.
-- **Not implemented yet, worth knowing about**: `verify_password` is reused-ready for the discount/cancel authorization modals that arrive with Vendas; the stock movement ledger (`stock_movements`) is now actively written (`initial`/`entry`/`adjustment`) but still has no consultation screen. Known gaps/ideas noticed but out of scope: [docs/future.md](docs/future.md).
-- Planned implementation order from here (per `PLANO.md`'s "Próximos passos"): venda (PDV) + recibo PDF → crediário/devedores → dashboard/relatórios → backup/autoupdate/CSV.
+**What's implemented so far** lives in `Plans/PLANO.md`'s "Próximos passos" checklist (kept up to date there, not duplicated here) — until that file is retired once everything in it is built.
 
 ## Adding features
 
