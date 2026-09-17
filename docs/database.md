@@ -10,7 +10,7 @@ Single file: `stockly.db` in the app's data directory.
 Two functions, called in this order in `open_connection`:
 
 1. **`init_db`** — `CREATE TABLE IF NOT EXISTS` with the **complete, current** schema of each table. This is what runs on a brand-new installation from scratch.
-2. **`migrate_db`** — idempotent `ALTER TABLE ... ADD COLUMN` (the "column already exists" error is ignored) for databases that already existed **before** a new column/table was added. Still empty — schema v1, no prior version to migrate from yet.
+2. **`migrate_db`** — idempotent `ALTER TABLE ... ADD COLUMN` (the "column already exists" error is ignored) for databases that already existed **before** a new column/table was added. First real entry: `users.last_login_at` (added after real installs already existed).
 
 **Rule when adding a new column/table:** it needs to go in both places — the `CREATE TABLE` inside `init_db` (for fresh installs) **and** as an `ALTER TABLE` in `migrate_db` (for those who already had the database). Any `CREATE INDEX` that depends on that new column can only run **after** it's guaranteed to exist — i.e. inside `migrate_db`, never inside the same `execute_batch` block of `init_db` right after the `CREATE TABLE IF NOT EXISTS` of the table that received it (this already broke a sibling project once: the index was placed in `init_db` and broke on any database that predated the column, because there the table already existed without it and the `CREATE TABLE IF NOT EXISTS` became a no-op).
 
@@ -23,12 +23,13 @@ Two functions, called in this order in `open_connection`:
 |---|---|---|
 | `id` | INTEGER PK | |
 | `name` | TEXT NOT NULL | display name |
-| `username` | TEXT NOT NULL UNIQUE | login handle |
-| `password_hash` | TEXT NOT NULL | |
+| `username` | TEXT NOT NULL UNIQUE | **internal login key only, never shown or typed anywhere in the UI** — login picks a profile from a picker (by `id`), it doesn't type a username. Auto-derived from `name` at creation time by `commands::users::slugify` (lowercase, accents stripped, everything else collapsed to `_` — "João da Silva" → `joao_da_silva`) plus `unique_username` appending `_2`, `_3`... on a collision. Immutable after creation (`update_user` never touches it), and intentionally excluded from `UserProfile`/`USER_PROFILE_COLUMNS` — the frontend has no reason to ever see it |
+| `password_hash` | TEXT NOT NULL | bcrypt |
 | `is_admin` | INTEGER NOT NULL DEFAULT 0 | boolean |
 | `active` | INTEGER NOT NULL DEFAULT 1 | boolean — deactivated users disappear from the login profile picker |
 | `auto_lock_minutes` | INTEGER NULL | three-state: `NULL` = use the role default (5 min for Admin, never for Usuário comum), `0` = "Nunca" explicitly chosen, `N` = N minutes |
-| `theme` | TEXT NOT NULL DEFAULT `'light'`, `CHECK IN ('light', 'dark')` | per-profile, not global — decided in favor of a typed column over a generic key-value table, matching `auto_lock_minutes`. **Not wired up yet**: `src/theme.ts` still reads/writes `localStorage` (no `user_id`) because there's no login/session yet to know which user's row to read — this column becomes the real source of truth once auth exists, at which point `theme.ts`'s localStorage path should be replaced (read on login, write through a command on toggle), not kept as a second, competing store |
+| `theme` | TEXT NOT NULL DEFAULT `'light'`, `CHECK IN ('light', 'dark')` | per-profile, not global — a typed column rather than a generic key-value table, matching `auto_lock_minutes`. Wired end-to-end: `ThemeContext` applies `localStorage` before login (first-run/login/lock screens need a theme too), then switches to this column's value on login and writes through `update_theme` on every change |
+| `last_login_at` | TEXT NULL | set to `datetime('now')` (UTC) by `login` on success, and by `create_user`'s first-run auto-login — `NULL` means the profile was created but has never actually logged in yet. Added after the table already existed on real installs, so it's also in `migrate_db` as an `ALTER TABLE` (see "Schema/migration pattern" above) |
 | `created_at` | TEXT | |
 
 The very first user ever created becomes Admin automatically (no role picker on that form) and is auto-logged-in right after (`Plans/PLANO.md` → "Primeiro uso do app"). Elevating an existing Usuário comum to Admin requires a confirmation modal at the UI layer — no schema-level distinction beyond the `is_admin` flag.

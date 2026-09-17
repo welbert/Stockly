@@ -9,7 +9,7 @@ pub fn open_connection(db_path: PathBuf) -> rusqlite::Result<Connection> {
     Ok(conn)
 }
 
-fn init_db(conn: &Connection) -> rusqlite::Result<()> {
+pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS users (
             id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,6 +20,7 @@ fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             active            INTEGER NOT NULL DEFAULT 1,
             auto_lock_minutes INTEGER NULL,
             theme             TEXT    NOT NULL DEFAULT 'light' CHECK (theme IN ('light', 'dark')),
+            last_login_at     TEXT    NULL,
             created_at        TEXT    NOT NULL DEFAULT (datetime('now'))
         );
 
@@ -121,10 +122,19 @@ fn init_db(conn: &Connection) -> rusqlite::Result<()> {
     )
 }
 
-fn migrate_db(_conn: &Connection) {
-    // Vazia por enquanto — primeira versão do schema. Futuras alterações em
-    // bancos já existentes (ALTER TABLE idempotente) entram aqui, nunca em
-    // init_db (ver "Schema rule" no CLAUDE.md).
+fn migrate_db(conn: &Connection) {
+    // Seguro rodar a cada início — o erro de "coluna já existe" é ignorado.
+    let _ = conn.execute("ALTER TABLE users ADD COLUMN last_login_at TEXT NULL", []);
+}
+
+/// In-memory connection with the schema applied — reused by other modules'
+/// tests (e.g. commands::users) so they don't each reimplement this setup.
+#[cfg(test)]
+pub(crate) fn test_connection() -> Connection {
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+    init_db(&conn).unwrap();
+    conn
 }
 
 #[cfg(test)]
