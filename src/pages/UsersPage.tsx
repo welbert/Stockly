@@ -55,7 +55,7 @@ export function UsersPage() {
       setToDelete(null);
       reload();
     } catch (err) {
-      logger.error("falha ao excluir usuário", err);
+      logger.error("falha ao excluir usuário", toDelete.id, err);
       setDeleteError(String(err));
     }
   }

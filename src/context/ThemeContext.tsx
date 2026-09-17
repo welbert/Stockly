@@ -35,7 +35,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState(next);
     storeTheme(next);
     if (user) {
-      updateTheme(next).catch((err) => logger.error("falha ao salvar tema do usuário", err));
+      updateTheme(next).catch((err) => logger.error("falha ao salvar tema do usuário", user.id, err));
     }
   }
 

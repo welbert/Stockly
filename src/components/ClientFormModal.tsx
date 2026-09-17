@@ -81,7 +81,7 @@ export function ClientFormModal({ initial, admins, onSaved, onClose }: ClientFor
         : await createClient(input);
       onSaved(saved);
     } catch (err) {
-      logger.error("falha ao salvar devedor", err);
+      logger.error("falha ao salvar devedor", initial ? initial.id : "novo", err);
       setError(String(err));
     } finally {
       setSubmitting(false);

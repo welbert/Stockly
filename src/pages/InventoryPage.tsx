@@ -69,7 +69,7 @@ export function InventoryPage() {
       setToDelete(null);
       reload();
     } catch (err) {
-      logger.error("falha ao excluir item", err);
+      logger.error("falha ao excluir item", toDelete.id, err);
       setDeleteError(String(err));
     }
   }

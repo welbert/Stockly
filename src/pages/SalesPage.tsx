@@ -247,7 +247,7 @@ export function SalesPage() {
       setCompletedSale(sale);
       setShowPayment(false);
     } catch (err) {
-      logger.error("falha ao finalizar venda", err);
+      logger.error("falha ao finalizar venda", `paymentMethod=${method}`, `clientId=${clientId}`, err);
       setSaleError(String(err));
     } finally {
       setSubmittingSale(false);
@@ -367,8 +367,11 @@ export function SalesPage() {
                     <code className="mr-2 text-xs text-theme-3">{item.code}</code>
                     {item.name}
                   </span>
-                  <span className={item.quantity === 0 ? "text-xs font-semibold text-danger" : "text-xs text-theme-3"}>
-                    {item.quantity === 0 ? "Sem estoque" : `${item.quantity} disp.`}
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs text-theme-3">{fmt(item.salePrice)}</span>
+                    <span className={item.quantity === 0 ? "text-xs font-semibold text-danger" : "text-xs text-theme-3"}>
+                      {item.quantity === 0 ? "Sem estoque" : `${item.quantity} disp.`}
+                    </span>
                   </span>
                 </button>
               ))}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import type { ClientDetail, ClientSummary, CreditPaymentSummary, UserSummary } from "../lib/api";
-import { getClientDetail, listAdmins, listClients } from "../lib/api";
+import type { ClientDetail, ClientSummary, CreditPaymentSummary, CreditSaleSummary, UserSummary } from "../lib/api";
+import { getClientDetail, listAdmins, listClients, round2 } from "../lib/api";
 import { Button } from "../components/Button";
 import { CancelCreditPaymentModal } from "../components/CancelCreditPaymentModal";
 import { Card } from "../components/Card";
@@ -41,6 +41,20 @@ function ReminderBadge({ reminderDate }: { reminderDate: string | null }) {
   return <span className="text-theme-3">Lembrete: {fmtDate(reminderDate)}</span>;
 }
 
+function CreditSaleStatusBadge({ sale }: { sale: CreditSaleSummary }) {
+  if (sale.status === "cancelled") {
+    return <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">Cancelada</span>;
+  }
+  if (sale.remaining <= 0) {
+    return <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold text-success">Quitada</span>;
+  }
+  return (
+    <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
+      {sale.paid > 0 ? "Parcialmente paga" : "Em aberto"}
+    </span>
+  );
+}
+
 export function DevedoresPage() {
   const { user } = useAuth();
   const [clients, setClients] = useState<ClientSummary[]>([]);
@@ -53,7 +67,8 @@ export function DevedoresPage() {
   const [creditSalesPage, setCreditSalesPage] = useState(0);
   const [paymentsPage, setPaymentsPage] = useState(0);
   const [editing, setEditing] = useState<ClientSummary | "new" | null>(null);
-  const [paying, setPaying] = useState<ClientSummary | null>(null);
+  const [selectedSaleIds, setSelectedSaleIds] = useState<Set<number>>(new Set());
+  const [payingSales, setPayingSales] = useState<CreditSaleSummary[] | null>(null);
   const [viewingSaleId, setViewingSaleId] = useState<number | null>(null);
   const [cancelingPayment, setCancelingPayment] = useState<CreditPaymentSummary | null>(null);
 
@@ -73,13 +88,14 @@ export function DevedoresPage() {
   useEffect(() => {
     setCreditSalesPage(0);
     setPaymentsPage(0);
+    setSelectedSaleIds(new Set());
     if (selectedId === null) {
       setSelected(null);
       return;
     }
     getClientDetail(selectedId)
       .then(setSelected)
-      .catch((err) => logger.error("falha ao carregar detalhe do devedor", err));
+      .catch((err) => logger.error("falha ao carregar detalhe do devedor", selectedId, err));
   }, [selectedId]);
 
   /** The stat cards always look only at real debtors (open balance),
@@ -118,11 +134,26 @@ export function DevedoresPage() {
     [selected, paymentsPage],
   );
 
+  const selectedSales = useMemo(
+    () => selected?.creditSales.filter((s) => selectedSaleIds.has(s.saleId)) ?? [],
+    [selected, selectedSaleIds],
+  );
+  const selectedSalesTotal = useMemo(() => round2(selectedSales.reduce((sum, s) => sum + s.remaining, 0)), [selectedSales]);
+
+  function toggleSaleSelection(saleId: number) {
+    setSelectedSaleIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(saleId)) next.delete(saleId);
+      else next.add(saleId);
+      return next;
+    });
+  }
+
   function reloadSelected() {
     if (selectedId === null) return;
     getClientDetail(selectedId)
       .then(setSelected)
-      .catch((err) => logger.error("falha ao recarregar detalhe do devedor", err));
+      .catch((err) => logger.error("falha ao recarregar detalhe do devedor", selectedId, err));
   }
 
   function handleClientSaved(client: ClientSummary) {
@@ -231,56 +262,75 @@ export function DevedoresPage() {
                 <Button variant="secondary" onClick={() => setEditing(selected)}>
                   Editar cliente
                 </Button>
-                <Button variant="primary" disabled={selected.balance <= 0} onClick={() => setPaying(selected)}>
-                  Registrar pagamento
-                </Button>
               </div>
             </div>
 
             <div className="mb-1.5 text-xs font-semibold text-theme-3">Vendas em Crediário</div>
-            <table className="mb-4 w-full text-sm">
+            <table className="mb-2 w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-border text-left text-xs uppercase tracking-wide text-theme-3">
+                  <th className="w-8 py-2" />
                   <th className="py-2">Recibo</th>
                   <th className="py-2">Data</th>
-                  <th className="py-2">Valor</th>
+                  <th className="py-2">Valor total</th>
+                  <th className="py-2">Saldo restante</th>
                   <th className="py-2">Status</th>
                   <th className="py-2" />
                 </tr>
               </thead>
               <tbody>
-                {pagedCreditSales.map((s) => (
-                  <tr key={s.saleId} className="border-b border-theme-border last:border-0">
-                    <td className="py-2">
-                      <code className="text-xs">{s.receiptNumber}</code>
-                    </td>
-                    <td className="py-2 text-theme-1">{fmtDateTime(s.createdAt)}</td>
-                    <td className={`py-2 ${s.status === "cancelled" ? "text-theme-3 line-through" : "text-theme-1"}`}>
-                      {fmt(s.total)}
-                    </td>
-                    <td className="py-2">
-                      {s.status === "cancelled" ? (
-                        <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">Cancelada</span>
-                      ) : (
-                        <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold text-success">Concluída</span>
-                      )}
-                    </td>
-                    <td className="py-2 text-right">
-                      <Button variant="ghost" onClick={() => setViewingSaleId(s.saleId)}>
-                        Ver venda
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {pagedCreditSales.map((s) => {
+                  const selectable = s.status === "completed" && s.remaining > 0;
+                  return (
+                    <tr key={s.saleId} className={`border-b border-theme-border last:border-0 ${selectedSaleIds.has(s.saleId) ? "bg-primary-soft" : ""}`}>
+                      <td className="py-2">
+                        <Checkbox
+                          label=""
+                          checked={selectedSaleIds.has(s.saleId)}
+                          disabled={!selectable}
+                          onChange={() => toggleSaleSelection(s.saleId)}
+                        />
+                      </td>
+                      <td className="py-2">
+                        <code className="text-xs">{s.receiptNumber}</code>
+                      </td>
+                      <td className="py-2 text-theme-1">{fmtDateTime(s.createdAt)}</td>
+                      <td className={`py-2 ${s.status === "cancelled" ? "text-theme-3 line-through" : "text-theme-1"}`}>
+                        {fmt(s.total)}
+                      </td>
+                      <td className="py-2 font-semibold text-theme-1">{s.status === "cancelled" ? "—" : fmt(s.remaining)}</td>
+                      <td className="py-2">
+                        <CreditSaleStatusBadge sale={s} />
+                      </td>
+                      <td className="py-2 text-right">
+                        <Button variant="ghost" onClick={() => setViewingSaleId(s.saleId)}>
+                          Ver venda
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {selected.creditSales.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-3 text-center text-theme-3">
+                    <td colSpan={7} className="py-3 text-center text-theme-3">
                       Nenhuma venda em Crediário ainda.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+
+            {selectedSaleIds.size > 0 && (
+              <div className="mb-2 flex items-center justify-between rounded-lg bg-primary-soft px-3 py-2 text-xs">
+                <span>
+                  <strong>{selectedSaleIds.size}</strong> venda{selectedSaleIds.size > 1 ? "s" : ""} selecionada
+                  {selectedSaleIds.size > 1 ? "s" : ""} · total <strong>{fmt(selectedSalesTotal)}</strong>
+                </span>
+                <Button variant="primary" onClick={() => setPayingSales(selectedSales)}>
+                  Pagar selecionada{selectedSaleIds.size > 1 ? "s" : ""}
+                </Button>
+              </div>
+            )}
             <Pagination page={creditSalesPage} pageSize={HISTORY_PAGE_SIZE} total={selected.creditSales.length} onPageChange={setCreditSalesPage} />
 
             <div className="mb-1.5 mt-4 text-xs font-semibold text-theme-3">Pagamentos registrados</div>
@@ -289,6 +339,7 @@ export function DevedoresPage() {
                 <tr className="border-b border-theme-border text-left text-xs uppercase tracking-wide text-theme-3">
                   <th className="py-2">Data</th>
                   <th className="py-2">Valor</th>
+                  <th className="py-2">Vendas relacionadas</th>
                   <th className="py-2">Operador</th>
                   <th className="py-2" />
                 </tr>
@@ -298,6 +349,20 @@ export function DevedoresPage() {
                   <tr key={p.id} className="border-b border-theme-border last:border-0">
                     <td className="py-2 text-theme-1">{fmtDateTime(p.createdAt)}</td>
                     <td className={`py-2 ${p.cancelledAt ? "text-theme-3 line-through" : "text-theme-1"}`}>{fmt(p.amount)}</td>
+                    <td className="py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {p.allocations.map((a) => (
+                          <button
+                            key={a.saleId}
+                            onClick={() => setViewingSaleId(a.saleId)}
+                            className="inline-flex items-center gap-1 rounded-full border border-theme-border bg-theme-hover px-2 py-0.5 text-[11px] text-theme-1 hover:border-primary hover:text-primary"
+                          >
+                            <code>{a.receiptNumber}</code>
+                            <span className="text-theme-3">{fmt(a.amount)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </td>
                     <td className="py-2 text-theme-1">{p.userName}</td>
                     <td className="py-2 text-right">
                       {p.cancelledAt ? (
@@ -318,7 +383,7 @@ export function DevedoresPage() {
                 ))}
                 {selected.payments.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-3 text-center text-theme-3">
+                    <td colSpan={5} className="py-3 text-center text-theme-3">
                       Nenhum pagamento registrado ainda.
                     </td>
                   </tr>
@@ -343,11 +408,13 @@ export function DevedoresPage() {
         />
       )}
 
-      {paying && (
+      {payingSales && selected && (
         <CreditPaymentModal
-          client={paying}
+          client={selected}
+          selectedSales={payingSales}
           onSaved={(updated) => {
-            setPaying(null);
+            setPayingSales(null);
+            setSelectedSaleIds(new Set());
             reloadList();
             setPaymentsPage(0); // jump back to the newest page so the payment just registered is visible
             // A full payoff drops out of the left list (unless "Mostrar
@@ -357,7 +424,7 @@ export function DevedoresPage() {
             if (updated.balance > 0 || showSettled) setSelected(updated);
             else setSelectedId(null);
           }}
-          onClose={() => setPaying(null)}
+          onClose={() => setPayingSales(null)}
         />
       )}
 
@@ -374,9 +441,10 @@ export function DevedoresPage() {
         />
       )}
 
-      {cancelingPayment && (
+      {cancelingPayment && selected && (
         <CancelCreditPaymentModal
           payment={cancelingPayment}
+          client={selected}
           requiresAuth={!user.isAdmin}
           admins={admins}
           onCancelled={(updated) => {

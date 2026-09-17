@@ -140,7 +140,7 @@ function ProfilePicker() {
     try {
       await login(profile.id, password);
     } catch (err) {
-      logger.error("falha no login", err);
+      logger.error("falha no login", profile.id, err);
       setError("Senha incorreta.");
       setPassword("");
     } finally {

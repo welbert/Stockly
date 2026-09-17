@@ -1,6 +1,7 @@
-import { FormEvent, useState } from "react";
-import type { SaleDetail, UserSummary } from "../lib/api";
-import { cancelSale, verifyPassword } from "../lib/api";
+import { FormEvent, useEffect, useState } from "react";
+import type { ClientDetail, SaleDetail, UserSummary } from "../lib/api";
+import { cancelSale, getClientDetail, round2, verifyPassword } from "../lib/api";
+import { fmt } from "../lib/format";
 import { logger } from "../logger";
 import { Button } from "./Button";
 import { Kbd } from "./Kbd";
@@ -19,15 +20,29 @@ interface CancelSaleModalProps {
 
 /** Cancels/estorna a completed sale — never deleted, just flipped to
  * `status: 'cancelled'` with who requested/authorized it (`Plans/PLANO.md`'s
- * "Cancelamento / Estorno de venda"). Returns stock and, for a Crediário
- * sale, reverses the client's open balance too (see `commands::sales::cancel_sale`) —
- * no "motivo" field here, unlike cancelling a Crediário payment, since PLANO.md
- * doesn't ask for one on this action. */
+ * "Cancelamento / Estorno de venda"). Returns stock and, for a Crediário sale,
+ * drops its own total off the client's balance (see `commands::sales::cancel_sale`) —
+ * fetches the client's current balance (`getClientDetail`) just to spell out
+ * the exact before/after in the confirmation text, same reasoning as
+ * `CancelCreditPaymentModal`. Any amount already paid on this sale isn't
+ * reversed — it becomes floating credit for the client, called out separately
+ * when `sale.creditPaid` is set. No "motivo" field here, unlike cancelling a
+ * Crediário payment, since PLANO.md doesn't ask for one on this action. */
 export function CancelSaleModal({ sale, requiresAuth, admins, onCancelled, onClose }: CancelSaleModalProps) {
   const [adminId, setAdminId] = useState(admins[0]?.id ?? 0);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Only fetched for a Crediário sale, to spell out the exact before/after
+  // balance instead of leaving the operator to do the math themselves.
+  const [client, setClient] = useState<ClientDetail | null>(null);
+
+  useEffect(() => {
+    if (sale.clientId === null) return;
+    getClientDetail(sale.clientId)
+      .then(setClient)
+      .catch((err) => logger.error("falha ao carregar detalhe do devedor", sale.clientId, err));
+  }, [sale.clientId]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -54,7 +69,7 @@ export function CancelSaleModal({ sale, requiresAuth, admins, onCancelled, onClo
       });
       onCancelled(updated);
     } catch (err) {
-      logger.error("falha ao cancelar venda", err);
+      logger.error("falha ao cancelar venda", sale.id, err);
       setError(String(err));
     } finally {
       setSubmitting(false);
@@ -65,8 +80,25 @@ export function CancelSaleModal({ sale, requiresAuth, admins, onCancelled, onClo
     <Modal title={`Cancelar venda #${sale.receiptNumber}`} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         <p className="text-sm text-theme-2">
-          Devolve os itens ao estoque{sale.clientName ? ` e reverte o saldo em Crediário de ${sale.clientName}` : ""}. O
-          histórico da venda não é apagado — só fica marcado como cancelada. Essa ação não pode ser desfeita.
+          {sale.clientId !== null && client ? (
+            <>
+              Essa ação vai reduzir o débito de <span className="font-semibold text-theme-1">{sale.clientName}</span> de{" "}
+              <span className="font-semibold text-theme-1">{fmt(client.balance)}</span> para{" "}
+              <span className="font-semibold text-theme-1">{fmt(round2(client.balance - sale.total))}</span>, já que a
+              venda de <span className="font-semibold text-theme-1">{fmt(sale.total)}</span> será cancelada, e devolve os
+              itens ao estoque.
+            </>
+          ) : (
+            <>Devolve os itens ao estoque{sale.clientName ? ` e reduz o débito de ${sale.clientName}` : ""}.</>
+          )}
+        </p>
+        {sale.creditPaid !== null && (
+          <p className="mt-2 text-xs text-theme-3">
+            O valor de {fmt(sale.creditPaid)} já pago nessa venda não é estornado — vira saldo credor de {sale.clientName}.
+          </p>
+        )}
+        <p className="mt-2 text-sm text-theme-2">
+          O histórico da venda não é apagado — só fica marcado como cancelada. Essa ação não pode ser desfeita.
         </p>
 
         {requiresAuth && (

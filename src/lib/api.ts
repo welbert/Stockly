@@ -271,9 +271,10 @@ export type SaleDetail = {
   /** Only set when `paymentMethod === "credit"`. */
   clientId: number | null;
   clientName: string | null;
-  /** Amount of the Crediário debt already paid off at sale time, if any —
-   * `null` when nothing was paid up front (the whole `total` is open balance). */
-  creditPaidNow: number | null;
+  /** Amount of the Crediário debt paid off so far for this specific sale —
+   * whether paid at sale time or later through Devedores. `null` when nothing
+   * has been paid on it yet. */
+  creditPaid: number | null;
   /** The three `cancel*` fields below are only set once the sale has been
    * cancelled/estornada — never deleted, see `cancelSale`. */
   cancelledAt: string | null;
@@ -367,8 +368,20 @@ export type CreditSaleSummary = {
   receiptNumber: string;
   createdAt: string;
   total: number;
+  /** Sum of active allocations already applied to this specific sale. */
+  paid: number;
+  /** `total - paid` — what's still owed on this sale specifically. */
+  remaining: number;
   /** `"completed"` or `"cancelled"`. */
   status: string;
+};
+
+/** One sale a payment was applied to, and how much of that payment went to
+ * it — a payment can span multiple sales (see `registerCreditPayment`). */
+export type CreditPaymentAllocationSummary = {
+  saleId: number;
+  receiptNumber: string;
+  amount: number;
 };
 
 export type CreditPaymentSummary = {
@@ -376,6 +389,7 @@ export type CreditPaymentSummary = {
   amount: number;
   userName: string;
   createdAt: string;
+  allocations: CreditPaymentAllocationSummary[];
   /** Only filled in once the payment has been cancelled (soft-cancel, never deleted). */
   cancelledAt: string | null;
   cancelledByName: string | null;
@@ -418,8 +432,19 @@ export function getClientDetail(id: number) {
   return call<ClientDetail>("get_client_detail", { id });
 }
 
-export function registerCreditPayment(clientId: number, amount: number) {
-  return call<ClientDetail>("register_credit_payment", { clientId, amount });
+/** Pays off one or more of the client's own open Crediário sales at once.
+ * `amount` can be less than the combined `remaining` of `saleIds`, in which
+ * case `residualSaleId` (one of `saleIds`) says which one absorbs the
+ * difference and stays partially paid — every other selected sale is paid
+ * off in full. Omit `residualSaleId` when `amount` covers the full sum (or
+ * when only one sale is selected — nothing to choose there). */
+export function registerCreditPayment(input: {
+  clientId: number;
+  saleIds: number[];
+  amount: number;
+  residualSaleId: number | null;
+}) {
+  return call<ClientDetail>("register_credit_payment", input);
 }
 
 /** Soft-cancel — doesn't delete the payment, just marks it with a reason.

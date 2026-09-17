@@ -47,6 +47,10 @@ The **backend is the real access boundary**, not the UI hiding a button. Every a
 
 **Closing a form modal with unsaved input asks first.** Every form modal (`ItemFormModal`, `UserFormModal`) computes a `dirty` flag (current field values vs. the `initial` prop) and routes backdrop-click/✕/Cancelar through a `requestClose()` function — closes right away when `!dirty`, otherwise opens a `ConfirmModal` ("Descartar alterações?") first. Apply the same to any new form modal rather than wiring `Modal`'s `onClose` straight to the parent's close handler; it's an easy thing to forget since a modal closes without it too, just silently loses whatever was typed. Implementation details (exactly how `dirty` is computed) are in `docs/frontend.md`, not repeated here.
 
+## Logging rule (`src/logger.ts`)
+
+**Every `logger.error`/`.warn` call is enriched with whatever id(s) identify the record involved** — item, user, sale, client, payment — passed as extra args before the caught error (e.g. `logger.error("falha ao excluir item", toDelete.id, err)`), never just `(message, err)` when a relevant id is available in scope. `logger`'s functions are variadic and every arg gets serialized into the line (see `serialize` in `logger.ts`), so this is free — no template-string concatenation needed. Skip the id only when there genuinely isn't one in scope (a plain listing/read with nothing specific to point at, e.g. `list_items`/`list_clients` failing). The point: a log line a user forwards should be traceable back to the exact record that failed, not just "something failed."
+
 ## Versioning rule
 
 **When bumping the version, update all 3 files in sync** — they always need to match: `package.json` (`"version"`), `src-tauri/Cargo.toml` (`version`), `src-tauri/tauri.conf.json` (`"version"`).

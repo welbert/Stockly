@@ -104,7 +104,7 @@ export function ItemFormModal({ initial, onSaved, onClose }: ItemFormModalProps)
       const saved = initial ? await updateItem({ id: initial.id, ...payload, active }) : await createItem(payload);
       onSaved(saved);
     } catch (err) {
-      logger.error("falha ao salvar item", err);
+      logger.error("falha ao salvar item", initial ? initial.id : "novo", err);
       setError(String(err));
     } finally {
       setSubmitting(false);

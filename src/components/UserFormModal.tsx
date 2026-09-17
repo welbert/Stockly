@@ -60,7 +60,7 @@ export function UserFormModal({ initial, onSaved, onClose }: UserFormModalProps)
         : await createUser({ name, password, isAdmin });
       onSaved(saved);
     } catch (err) {
-      logger.error("falha ao salvar usuário", err);
+      logger.error("falha ao salvar usuário", initial ? initial.id : "novo", err);
       setError(String(err));
     } finally {
       setSubmitting(false);

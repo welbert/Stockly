@@ -49,7 +49,7 @@ export function ReceiptResultModal({ sale, storeName, storeInfo, thankYouMessage
       setPdfPath(path);
       return path;
     } catch (err) {
-      logger.error("falha ao gerar recibo em PDF", err);
+      logger.error("falha ao gerar recibo em PDF", sale.id, err);
       setError("Não foi possível gerar o PDF do recibo.");
       return null;
     } finally {
@@ -63,7 +63,7 @@ export function ReceiptResultModal({ sale, storeName, storeInfo, thankYouMessage
     try {
       await printFile(path);
     } catch (err) {
-      logger.error("falha ao imprimir recibo", err);
+      logger.error("falha ao imprimir recibo", sale.id, err);
       setError("Não foi possível imprimir o recibo.");
     }
   }
@@ -128,15 +128,15 @@ export function ReceiptResultModal({ sale, storeName, storeInfo, thankYouMessage
           <span>TOTAL</span>
           <span>{fmt(sale.total)}</span>
         </div>
-        {sale.creditPaidNow !== null && (
+        {sale.creditPaid !== null && (
           <>
             <div className="flex justify-between">
-              <span>Valor pago agora</span>
-              <span>{fmt(sale.creditPaidNow)}</span>
+              <span>Valor pago</span>
+              <span>{fmt(sale.creditPaid)}</span>
             </div>
             <div className="flex justify-between">
               <span>Saldo Crediário</span>
-              <span>{fmt(sale.total - sale.creditPaidNow)}</span>
+              <span>{fmt(sale.total - sale.creditPaid)}</span>
             </div>
           </>
         )}

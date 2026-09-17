@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
-import type { ClientDetail, CreditPaymentSummary, UserSummary } from "../lib/api";
-import { cancelCreditPayment, verifyPassword } from "../lib/api";
+import type { ClientDetail, ClientSummary, CreditPaymentSummary, UserSummary } from "../lib/api";
+import { cancelCreditPayment, round2, verifyPassword } from "../lib/api";
 import { fmt, fmtDateTime } from "../lib/format";
 import { logger } from "../logger";
 import { Button } from "./Button";
@@ -9,6 +9,7 @@ import { Modal } from "./Modal";
 
 interface CancelCreditPaymentModalProps {
   payment: CreditPaymentSummary;
+  client: ClientSummary;
   /** `true` when the logged-in user isn't Admin — asks for a *different*
    * admin's password, same pattern as `DiscountModal`. A logged-in Admin
    * self-authorizes instead. */
@@ -22,7 +23,8 @@ interface CancelCreditPaymentModalProps {
  * just marked with who cancelled it and why (see "Pagamentos registrados" in
  * `DevedoresPage`). Reverses a financial entry, so it requires admin
  * authorization, unlike registering the payment itself. */
-export function CancelCreditPaymentModal({ payment, requiresAuth, admins, onCancelled, onClose }: CancelCreditPaymentModalProps) {
+export function CancelCreditPaymentModal({ payment, client, requiresAuth, admins, onCancelled, onClose }: CancelCreditPaymentModalProps) {
+  const balanceAfter = round2(client.balance + payment.amount);
   const [reason, setReason] = useState("");
   const [adminId, setAdminId] = useState(admins[0]?.id ?? 0);
   const [password, setPassword] = useState("");
@@ -59,7 +61,7 @@ export function CancelCreditPaymentModal({ payment, requiresAuth, admins, onCanc
       });
       onCancelled(updated);
     } catch (err) {
-      logger.error("falha ao cancelar pagamento", err);
+      logger.error("falha ao cancelar pagamento", payment.id, err);
       setError(String(err));
     } finally {
       setSubmitting(false);
@@ -69,9 +71,13 @@ export function CancelCreditPaymentModal({ payment, requiresAuth, admins, onCanc
   return (
     <Modal title="Cancelar pagamento" onClose={onClose}>
       <form onSubmit={handleSubmit}>
+        <p className="mb-3 text-sm text-theme-2">
+          Essa ação vai aumentar o débito de <span className="font-semibold text-theme-1">{client.name}</span> para{" "}
+          <span className="font-semibold text-theme-1">{fmt(balanceAfter)}</span>, já que você está cancelando o pagamento
+          de <span className="font-semibold text-theme-1">{fmt(payment.amount)}</span>.
+        </p>
         <p className="mb-3 text-xs text-theme-3">
-          {fmtDateTime(payment.createdAt)} · <span className="font-semibold text-theme-1">{fmt(payment.amount)}</span> · registrado por{" "}
-          {payment.userName}
+          {fmtDateTime(payment.createdAt)} · registrado por {payment.userName}
         </p>
 
         <label className="mb-1 block text-xs font-semibold text-theme-3">Motivo *</label>

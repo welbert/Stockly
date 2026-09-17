@@ -100,7 +100,7 @@ Not a `users` row — clients never log in.
 | `cancel_authorized_by_user_id` | INTEGER NULL → `users(id)` | which Admin authorized it |
 | `created_at` | TEXT | |
 
-Cancelling/reverting a sale (`commands::sales::cancel_sale`, from Histórico de vendas or Devedores' "Ver venda") never deletes the row — it flips `status` to `cancelled` and fills the three `cancelled_*`/`cancel_authorized_*` columns, plus reverses the stock (a `refund`-type row per item in `stock_movements`, only for lines whose item wasn't hard-deleted since). A Crediário client's open balance is **never a stored column** — it's always `SUM(sales.total WHERE client_id = ? AND status = 'completed' AND <a 'credit' sale_payments row exists>) - SUM(credit_payments.amount WHERE client_id = ? AND cancelled_at IS NULL)`, computed on read. Cancelling a Crediário sale therefore reduces the client's balance automatically, just by excluding it from that sum — but if the sale also had a "Valor pago agora" down payment (a `credit_payments` row with `sale_id` set), `cancel_sale` soft-cancels that payment too in the same transaction; otherwise it would keep subtracting from the balance for a debt that no longer exists.
+Cancelling/reverting a sale (`commands::sales::cancel_sale`, from Histórico de vendas or Devedores' "Ver venda") never deletes the row — it flips `status` to `cancelled` and fills the three `cancelled_*`/`cancel_authorized_*` columns, plus reverses the stock (a `refund`-type row per item in `stock_movements`, only for lines whose item wasn't hard-deleted since). A Crediário client's open balance is **never a stored column** — it's always `SUM(sales.total WHERE client_id = ? AND status = 'completed' AND <a 'credit' sale_payments row exists>) - SUM(credit_payments.amount WHERE client_id = ? AND cancelled_at IS NULL)`, computed on read. Cancelling a Crediário sale reduces the client's balance automatically, just by excluding it from that sum — `cancel_sale` never touches `credit_payments`/`credit_payment_allocations` even if money had already been applied to this sale, at sale time or later: that amount simply becomes floating credit for the client instead of being reversed.
 
 Indexed on `client_id` and `status` (the two columns "Devedores" and sale listings filter by).
 
@@ -133,9 +133,8 @@ Modeled as its own table from day one specifically so a future split-payment fea
 |---|---|---|
 | `id` | INTEGER PK | |
 | `client_id` | INTEGER NOT NULL → `clients(id)` | |
-| `amount` | REAL, `CHECK (> 0)` | partial or full — any amount up to the current balance |
+| `amount` | REAL, `CHECK (> 0)` | total received in this event — partial or full against the sale(s) it's allocated to (see `credit_payment_allocations` below) |
 | `user_id` | INTEGER NOT NULL → `users(id)` | who registered it (no Admin password required) |
-| `sale_id` | INTEGER NULL → `sales(id)` | only set when this payment came from the "Valor pago agora" step of `create_sale` (a Crediário sale where the customer already had part of the money) — `NULL` for every payment registered later through Devedores' "Registrar pagamento" |
 | `cancelled_at` | TEXT NULL | soft-cancel of a mistakenly-registered payment — never deleted. `NULL` = still active |
 | `cancelled_by_user_id` | INTEGER NULL → `users(id)` | who requested the cancellation |
 | `cancel_authorized_by_user_id` | INTEGER NULL → `users(id)` | which Admin authorized it (same "self-authorizes if already Admin, otherwise a *different* admin's password" rule as discount/cancel-sale — unlike registering the payment itself, which needs no admin password) |
@@ -143,6 +142,16 @@ Modeled as its own table from day one specifically so a future split-payment fea
 | `created_at` | TEXT | |
 
 A client's open balance only sums `amount` where `cancelled_at IS NULL` (see `commands::clients::client_balance`) — cancelling a payment is what makes the balance go back up, no separate reversal entry needed.
+
+### `credit_payment_allocations` — which sale(s) a payment covers
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `payment_id` | INTEGER NOT NULL → `credit_payments(id)` **CASCADE** | |
+| `sale_id` | INTEGER NOT NULL → `sales(id)` | |
+| `amount` | REAL, `CHECK (> 0)` | how much of `payment_id`'s total went to this specific sale |
+
+A `credit_payments` row can have 1+ allocation rows — `commands::clients::register_credit_payment` lets an operator select several open sales at once and pay them in a single event: every selected sale except one (the caller-chosen "residual") is allocated its full remaining balance, and the residual one absorbs whatever's left over. A sale's own remaining balance is `sale.total - SUM(allocations.amount WHERE sale_id = ? AND <payment not cancelled>)` (`commands::clients::sale_paid_amount`) — this is also how "Valor pago agora" is represented now: `create_sale` inserts a normal `credit_payments` row plus one allocation pointing at the sale it was just created for, instead of the single `sale_id` column `credit_payments` used to carry for that one case (removed — this app has no installs to preserve compatibility for yet).
 
 ### `config` — generic key/value
 ```

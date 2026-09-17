@@ -63,6 +63,7 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
   const [savingClient, setSavingClient] = useState(false);
   const [confirmDiscardClient, setConfirmDiscardClient] = useState(false);
   const clientInputRef = useRef<HTMLInputElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
 
   const newClientDirty =
     newClientName.trim() !== "" || newClientPhone.trim() !== "" || newClientReminder !== "" || newClientNote.trim() !== "";
@@ -134,18 +135,38 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
     }
   }
 
-  const creditPaidNowInvalid = method === "credit" && creditPaidNow >= total;
-  const canSubmit = method !== "credit" || (selectedClient !== null && !creditPaidNowInvalid);
+  // A negative balance means the client has store credit (e.g. from an
+  // overpayment on a sale later cancelled) — that credit is applied to this
+  // sale automatically, up to its own total, with no manual amount to type:
+  // there's nothing to decide, it's just the client's own money being used.
+  const storeCredit = selectedClient && selectedClient.balance < 0 ? round2(-selectedClient.balance) : 0;
+  const hasStoreCredit = storeCredit > 0;
+  const appliedStoreCredit = hasStoreCredit ? Math.min(storeCredit, total) : 0;
+  const effectiveCreditPaidNow = hasStoreCredit ? appliedStoreCredit : creditPaidNow;
+
+  const manualCreditInvalid = !hasStoreCredit && method === "credit" && creditPaidNow >= total;
+  const canSubmit = method !== "credit" || (selectedClient !== null && !manualCreditInvalid);
+
+  // Selecting a client unmounts the search input (a focused node being
+  // removed from the DOM drops focus to <body>, silently swallowing the next
+  // Enter press) — when there's no store credit, the freshly-mounted
+  // MoneyInput grabs focus on its own (see its `autoFocus` below); when the
+  // credit auto-applies, there's no input to focus at all, so this puts focus
+  // on "Finalizar" instead, letting a keyboard-only flow chain straight
+  // through search → select → Enter to finalize.
+  useEffect(() => {
+    if (selectedClient && hasStoreCredit) submitButtonRef.current?.focus();
+  }, [selectedClient, hasStoreCredit]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    onConfirm(method, method === "credit" ? selectedClient!.id : null, method === "credit" && creditPaidNow > 0 ? creditPaidNow : null);
+    onConfirm(method, method === "credit" ? selectedClient!.id : null, method === "credit" && effectiveCreditPaidNow > 0 ? effectiveCreditPaidNow : null);
   }
 
   function confirmWith(m: PaymentMethod) {
-    if (m === "credit" && (!selectedClient || creditPaidNowInvalid)) return;
-    onConfirm(m, m === "credit" ? selectedClient!.id : null, m === "credit" && creditPaidNow > 0 ? creditPaidNow : null);
+    if (m === "credit" && (!selectedClient || manualCreditInvalid)) return;
+    onConfirm(m, m === "credit" ? selectedClient!.id : null, m === "credit" && effectiveCreditPaidNow > 0 ? effectiveCreditPaidNow : null);
   }
 
   /** `←`/`→` move both the selection and focus between the method buttons —
@@ -225,7 +246,9 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
                   <div className="flex items-center justify-between rounded-lg border border-theme-border bg-primary-soft px-3 py-2.5">
                     <div>
                       <div className="text-sm font-semibold text-theme-1">{selectedClient.name}</div>
-                      <div className="text-xs text-theme-3">Saldo atual: {fmt(selectedClient.balance)}</div>
+                      <div className="text-xs text-theme-3">
+                        {hasStoreCredit ? `Crédito com a loja: ${fmt(storeCredit)}` : `Saldo atual: ${fmt(selectedClient.balance)}`}
+                      </div>
                     </div>
                     <Button
                       type="button"
@@ -239,18 +262,31 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
                     </Button>
                   </div>
                   <div className="mt-3">
-                    <label className="mb-1 block text-xs font-semibold text-theme-3">Valor pago agora (opcional)</label>
-                    <MoneyInput value={creditPaidNow} onChange={setCreditPaidNow} max={total} />
-                    {creditPaidNowInvalid ? (
-                      <p className="mt-1 text-[11px] text-danger">
-                        Isso é o valor total da venda — pra pagamento total, escolha Dinheiro, Cartão ou PIX em vez de Crediário.
-                      </p>
-                    ) : (
-                      creditPaidNow > 0 && (
-                        <p className="mt-1 text-[11px] text-theme-3">
-                          Saldo Crediário após esta venda: {fmt(round2(selectedClient.balance + total - creditPaidNow))}
+                    {hasStoreCredit ? (
+                      <div className="rounded-lg border border-success/30 bg-success/10 px-3 py-2.5 text-xs">
+                        <p className="font-semibold text-success">Cliente possui saldo com a loja</p>
+                        <p className="mt-1 text-theme-3">
+                          {appliedStoreCredit >= total
+                            ? "O saldo cobre o valor total da venda — será quitada automaticamente."
+                            : `${fmt(appliedStoreCredit)} do saldo serão usados automaticamente nesta venda. Saldo Crediário após: ${fmt(round2(total - appliedStoreCredit))}.`}
                         </p>
-                      )
+                      </div>
+                    ) : (
+                      <>
+                        <label className="mb-1 block text-xs font-semibold text-theme-3">Valor pago agora (opcional)</label>
+                        <MoneyInput value={creditPaidNow} onChange={setCreditPaidNow} max={total} autoFocus />
+                        {manualCreditInvalid ? (
+                          <p className="mt-1 text-[11px] text-danger">
+                            Isso é o valor total da venda — pra pagamento total, escolha Dinheiro, Cartão ou PIX em vez de Crediário.
+                          </p>
+                        ) : (
+                          creditPaidNow > 0 && (
+                            <p className="mt-1 text-[11px] text-theme-3">
+                              Saldo Crediário após esta venda: {fmt(round2(selectedClient.balance + total - creditPaidNow))}
+                            </p>
+                          )
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -317,7 +353,9 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
                         className="flex w-full items-center justify-between border-b border-theme-border px-3 py-2 text-left text-sm hover:bg-theme-hover"
                       >
                         <span className="text-theme-1">{c.name}</span>
-                        <span className="text-xs text-theme-3">Saldo atual: {fmt(c.balance)}</span>
+                        <span className="text-xs text-theme-3">
+                          {c.balance < 0 ? `Crédito com a loja: ${fmt(round2(-c.balance))}` : `Saldo atual: ${fmt(c.balance)}`}
+                        </span>
                       </button>
                     ))}
                     <button
@@ -339,7 +377,7 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
             <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
               Voltar <Kbd>Esc</Kbd>
             </Button>
-            <Button type="submit" variant="primary" disabled={submitting || !canSubmit}>
+            <Button ref={submitButtonRef} type="submit" variant="primary" disabled={submitting || !canSubmit}>
               Finalizar <Kbd>Enter</Kbd>
             </Button>
           </div>

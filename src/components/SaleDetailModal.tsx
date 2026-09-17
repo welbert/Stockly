@@ -31,7 +31,7 @@ export function SaleDetailModal({ saleId, admins, requiresAuth, onClose, onCance
     getSaleDetail(saleId)
       .then(setSale)
       .catch((err) => {
-        logger.error("falha ao carregar detalhe da venda", err);
+        logger.error("falha ao carregar detalhe da venda", saleId, err);
         setError(String(err));
       });
   }
@@ -68,15 +68,15 @@ export function SaleDetailModal({ saleId, admins, requiresAuth, onClose, onCance
               <span>TOTAL</span>
               <span>{fmt(sale.total)}</span>
             </div>
-            {sale.creditPaidNow !== null && (
+            {sale.creditPaid !== null && (
               <>
                 <div className="flex justify-between">
-                  <span>Valor pago agora</span>
-                  <span>{fmt(sale.creditPaidNow)}</span>
+                  <span>Valor pago</span>
+                  <span>{fmt(sale.creditPaid)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Saldo Crediário</span>
-                  <span>{fmt(sale.total - sale.creditPaidNow)}</span>
+                  <span>{fmt(sale.total - sale.creditPaid)}</span>
                 </div>
               </>
             )}

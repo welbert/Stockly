@@ -1,5 +1,5 @@
 use crate::guard::{active_user_id, resolve_admin_authorization};
-use crate::models::{ClientDetail, ClientSummary, CreditPaymentSummary, CreditSaleSummary};
+use crate::models::{ClientDetail, ClientSummary, CreditPaymentAllocationSummary, CreditPaymentSummary, CreditSaleSummary};
 use crate::money::round2;
 use crate::AppState;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -7,8 +7,11 @@ use tauri::State;
 
 /// Sum of `sales.total` for completed Crediário sales, minus payments already
 /// registered — never stored directly, always derived so it can't drift from
-/// the ledger of sales/payments it's built from.
-fn client_balance(conn: &Connection, client_id: i64) -> Result<f64, String> {
+/// the ledger of sales/payments it's built from. `pub(crate)`: also used by
+/// `commands::sales::create_sale` to independently verify how much store
+/// credit (a negative balance) a client actually has before letting an
+/// automatic "Valor pago agora" cover the sale's full total.
+pub(crate) fn client_balance(conn: &Connection, client_id: i64) -> Result<f64, String> {
     let credit_sales_total: f64 = conn
         .query_row(
             "SELECT COALESCE(SUM(s.total), 0) FROM sales s
@@ -26,6 +29,20 @@ fn client_balance(conn: &Connection, client_id: i64) -> Result<f64, String> {
         )
         .map_err(|e| e.to_string())?;
     Ok(round2(credit_sales_total - paid_total))
+}
+
+/// Sum of active (non-cancelled-payment) `credit_payment_allocations` applied
+/// to a specific sale — how much of that sale's own `total` is already
+/// covered, regardless of which payment(s) it came from or when.
+fn sale_paid_amount(conn: &Connection, sale_id: i64) -> Result<f64, String> {
+    conn.query_row(
+        "SELECT COALESCE(SUM(cpa.amount), 0) FROM credit_payment_allocations cpa
+         JOIN credit_payments cp ON cp.id = cpa.payment_id
+         WHERE cpa.sale_id = ?1 AND cp.cancelled_at IS NULL",
+        params![sale_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Any client with an open balance blocks Crediário from being disabled in
@@ -138,6 +155,23 @@ fn non_empty(value: Option<String>) -> Option<String> {
     value.map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
 }
 
+fn fetch_payment_allocations(conn: &Connection, payment_id: i64) -> Result<Vec<CreditPaymentAllocationSummary>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT cpa.sale_id, s.receipt_number, cpa.amount FROM credit_payment_allocations cpa
+             JOIN sales s ON s.id = cpa.sale_id
+             WHERE cpa.payment_id = ?1
+             ORDER BY cpa.id",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![payment_id], |row| {
+            Ok(CreditPaymentAllocationSummary { sale_id: row.get(0)?, receipt_number: row.get(1)?, amount: row.get(2)? })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
 /// Client detail: balance plus the two histories shown side by side in
 /// Devedores ("Vendas em Crediário" and "Pagamentos registrados").
 #[tauri::command]
@@ -165,16 +199,22 @@ fn fetch_client_detail(conn: &Connection, id: i64) -> Result<ClientDetail, Strin
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map(params![id], |row| {
-                Ok(CreditSaleSummary {
-                    sale_id: row.get(0)?,
-                    receipt_number: row.get(1)?,
-                    created_at: row.get(2)?,
-                    total: row.get(3)?,
-                    status: row.get(4)?,
-                })
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, f64>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+        let raw: Vec<(i64, String, String, f64, String)> = rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+        raw.into_iter()
+            .map(|(sale_id, receipt_number, created_at, total, status)| {
+                let paid = sale_paid_amount(conn, sale_id)?;
+                Ok(CreditSaleSummary { sale_id, receipt_number, created_at, total, paid, remaining: round2(total - paid), status })
+            })
+            .collect::<Result<Vec<_>, String>>()?
     };
 
     let payments = {
@@ -196,6 +236,7 @@ fn fetch_client_detail(conn: &Connection, id: i64) -> Result<ClientDetail, Strin
                     amount: row.get(1)?,
                     user_name: row.get(2)?,
                     created_at: row.get(3)?,
+                    allocations: Vec::new(),
                     cancelled_at: row.get(4)?,
                     cancelled_by_name: row.get(5)?,
                     cancel_authorized_by_name: row.get(6)?,
@@ -203,36 +244,111 @@ fn fetch_client_detail(conn: &Connection, id: i64) -> Result<ClientDetail, Strin
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+        let mut payments: Vec<CreditPaymentSummary> = rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+        for payment in &mut payments {
+            payment.allocations = fetch_payment_allocations(conn, payment.id)?;
+        }
+        payments
     };
 
     Ok(ClientDetail { id, name, phone, reminder_date, note, balance: client_balance(&conn, id)?, credit_sales, payments })
 }
 
-/// Partial or total payoff — no admin password required (same decision as
-/// registering the Crediário sale itself). Rejects an amount that would leave
-/// the balance negative.
+struct SelectedSale {
+    id: i64,
+    remaining: f64,
+}
+
+/// Partial or total payoff of one or more of the client's own open Crediário
+/// sales — no admin password required (same decision as registering the
+/// Crediário sale itself). `sale_ids` are the ones checked in "Vendas em
+/// Crediário"; `amount` can be less than their combined `remaining`, in which
+/// case `residual_sale_id` (one of `sale_ids`) says which one absorbs the
+/// difference and stays partially paid — every other selected sale is paid
+/// off in full.
 #[tauri::command]
-pub fn register_credit_payment(state: State<AppState>, client_id: i64, amount: f64) -> Result<ClientDetail, String> {
-    let conn = state.db.lock().map_err(|e| e.to_string())?;
+pub fn register_credit_payment(
+    state: State<AppState>,
+    client_id: i64,
+    sale_ids: Vec<i64>,
+    amount: f64,
+    residual_sale_id: Option<i64>,
+) -> Result<ClientDetail, String> {
+    let mut conn = state.db.lock().map_err(|e| e.to_string())?;
     let user_id = active_user_id(&state)?;
     if amount <= 0.0 {
         return Err("Valor deve ser maior que zero".to_string());
+    }
+    if sale_ids.is_empty() {
+        return Err("Selecione ao menos uma venda".to_string());
     }
     let exists: Option<i64> =
         conn.query_row("SELECT id FROM clients WHERE id = ?1", params![client_id], |row| row.get(0)).optional().map_err(|e| e.to_string())?;
     if exists.is_none() {
         return Err("Cliente não encontrado".to_string());
     }
-    let balance = client_balance(&conn, client_id)?;
-    if round2(amount) > balance {
-        return Err("Valor não pode ser maior que o saldo em aberto".to_string());
+
+    let mut selected: Vec<SelectedSale> = Vec::with_capacity(sale_ids.len());
+    for sale_id in &sale_ids {
+        let (sale_client_id, status, total): (i64, String, f64) = conn
+            .query_row("SELECT client_id, status, total FROM sales WHERE id = ?1", params![sale_id], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })
+            .map_err(|_| "Venda não encontrada".to_string())?;
+        if sale_client_id != client_id {
+            return Err("Venda selecionada não pertence a este cliente".to_string());
+        }
+        if status != "completed" {
+            return Err("Venda cancelada não pode receber pagamento".to_string());
+        }
+        let remaining = round2(total - sale_paid_amount(&conn, *sale_id)?);
+        if remaining <= 0.0 {
+            return Err("Venda selecionada já está quitada".to_string());
+        }
+        selected.push(SelectedSale { id: *sale_id, remaining });
     }
-    conn.execute(
-        "INSERT INTO credit_payments (client_id, amount, user_id) VALUES (?1, ?2, ?3)",
-        params![client_id, round2(amount), user_id],
-    )
-    .map_err(|e| e.to_string())?;
+
+    let sum_remaining = round2(selected.iter().map(|s| s.remaining).sum());
+    let amount = round2(amount);
+    if amount > sum_remaining {
+        return Err("Valor não pode ser maior que a soma das vendas selecionadas".to_string());
+    }
+    let shortfall = round2(sum_remaining - amount);
+
+    if shortfall > 0.0 {
+        let residual_id = residual_sale_id.ok_or_else(|| "Selecione qual venda fica com o saldo residual".to_string())?;
+        let residual = selected
+            .iter()
+            .find(|s| s.id == residual_id)
+            .ok_or_else(|| "A venda do saldo residual precisa estar entre as selecionadas".to_string())?;
+        if shortfall > residual.remaining {
+            return Err("Valor insuficiente para quitar as demais vendas selecionadas".to_string());
+        }
+    }
+
+    {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO credit_payments (client_id, amount, user_id) VALUES (?1, ?2, ?3)",
+            params![client_id, amount, user_id],
+        )
+        .map_err(|e| e.to_string())?;
+        let payment_id = tx.last_insert_rowid();
+
+        for sale in &selected {
+            let alloc_amount =
+                if Some(sale.id) == residual_sale_id { round2(sale.remaining - shortfall) } else { sale.remaining };
+            if alloc_amount > 0.0 {
+                tx.execute(
+                    "INSERT INTO credit_payment_allocations (payment_id, sale_id, amount) VALUES (?1, ?2, ?3)",
+                    params![payment_id, sale.id, alloc_amount],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
 
     fetch_client_detail(&conn, client_id)
 }

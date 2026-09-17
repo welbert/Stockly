@@ -113,7 +113,7 @@ export function DiscountModal({
         authorizerPassword: requiresAuth ? password : undefined,
       });
     } catch (err) {
-      logger.error("falha ao verificar senha do administrador", err);
+      logger.error("falha ao verificar senha do administrador", adminId, err);
       setError("Não foi possível verificar a senha");
     } finally {
       setSubmitting(false);

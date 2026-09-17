@@ -111,7 +111,6 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             client_id                    INTEGER NOT NULL REFERENCES clients(id),
             amount                       REAL    NOT NULL CHECK (amount > 0),
             user_id                      INTEGER NOT NULL REFERENCES users(id),
-            sale_id                      INTEGER NULL REFERENCES sales(id),
             cancelled_at                 TEXT    NULL,
             cancelled_by_user_id         INTEGER NULL REFERENCES users(id),
             cancel_authorized_by_user_id INTEGER NULL REFERENCES users(id),
@@ -119,6 +118,15 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             created_at                   TEXT    NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_credit_payments_client ON credit_payments(client_id);
+
+        CREATE TABLE IF NOT EXISTS credit_payment_allocations (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            payment_id INTEGER NOT NULL REFERENCES credit_payments(id) ON DELETE CASCADE,
+            sale_id    INTEGER NOT NULL REFERENCES sales(id),
+            amount     REAL    NOT NULL CHECK (amount > 0)
+        );
+        CREATE INDEX IF NOT EXISTS idx_credit_payment_allocations_payment ON credit_payment_allocations(payment_id);
+        CREATE INDEX IF NOT EXISTS idx_credit_payment_allocations_sale ON credit_payment_allocations(sale_id);
 
         CREATE TABLE IF NOT EXISTS config (
             key   TEXT PRIMARY KEY,
@@ -134,7 +142,9 @@ fn migrate_db(conn: &Connection) {
     let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN cancelled_by_user_id INTEGER NULL REFERENCES users(id)", []);
     let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN cancel_authorized_by_user_id INTEGER NULL REFERENCES users(id)", []);
     let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN cancel_reason TEXT NULL", []);
-    let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN sale_id INTEGER NULL REFERENCES sales(id)", []);
+    // credit_payments.sale_id (added above, once) is superseded by credit_payment_allocations
+    // — dropped instead of kept around unused, since this app has no installs to preserve yet.
+    let _ = conn.execute("ALTER TABLE credit_payments DROP COLUMN sale_id", []);
 }
 
 /// In-memory connection with the schema applied — reused by other modules'

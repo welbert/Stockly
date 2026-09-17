@@ -1,4 +1,4 @@
-import { ButtonHTMLAttributes } from "react";
+import { ButtonHTMLAttributes, Ref } from "react";
 
 type Variant = "primary" | "secondary" | "danger" | "ghost";
 
@@ -14,6 +14,7 @@ const VARIANT_CLASSES: Record<Variant, string> = {
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 export function Button({ variant = "secondary", className = "", ...props }: ButtonProps) {

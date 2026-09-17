@@ -29,7 +29,7 @@ export function StockAdjustModal({ item, onSaved, onClose }: StockAdjustModalPro
       const saved = await addStockEntry(item.id, Number(quantity));
       onSaved(saved);
     } catch (err) {
-      logger.error("falha ao dar entrada de estoque", err);
+      logger.error("falha ao dar entrada de estoque", item.id, err);
       setError(String(err));
     } finally {
       setSubmitting(false);
@@ -41,7 +41,7 @@ export function StockAdjustModal({ item, onSaved, onClose }: StockAdjustModalPro
       const saved = await deactivateItem(item.id);
       onSaved(saved);
     } catch (err) {
-      logger.error("falha ao desativar item", err);
+      logger.error("falha ao desativar item", item.id, err);
       setError(String(err));
     }
   }

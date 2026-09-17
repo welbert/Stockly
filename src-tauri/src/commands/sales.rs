@@ -1,3 +1,4 @@
+use super::clients::client_balance;
 use crate::guard::{active_user_id, resolve_admin_authorization};
 use crate::models::{SaleDetail, SaleItemDetail, SaleItemInput, SaleListItem};
 use crate::money::round2;
@@ -171,14 +172,16 @@ pub(crate) fn fetch_sale_detail(
         })
         .map_err(|e| e.to_string())?;
 
-    let credit_paid_now: f64 = conn
+    let credit_paid: f64 = conn
         .query_row(
-            "SELECT COALESCE(SUM(amount), 0) FROM credit_payments WHERE sale_id = ?1 AND cancelled_at IS NULL",
+            "SELECT COALESCE(SUM(cpa.amount), 0) FROM credit_payment_allocations cpa
+             JOIN credit_payments cp ON cp.id = cpa.payment_id
+             WHERE cpa.sale_id = ?1 AND cp.cancelled_at IS NULL",
             params![sale_id],
             |row| row.get(0),
         )
         .map_err(|e| e.to_string())?;
-    let credit_paid_now = if credit_paid_now > 0.0 { Some(credit_paid_now) } else { None };
+    let credit_paid = if credit_paid > 0.0 { Some(credit_paid) } else { None };
 
     let items = fetch_sale_items(conn, sale_id)?;
 
@@ -196,7 +199,7 @@ pub(crate) fn fetch_sale_detail(
         payment_method,
         client_id,
         client_name,
-        credit_paid_now,
+        credit_paid,
         cancelled_at,
         cancelled_by_name,
         cancel_authorized_by_name,
@@ -258,10 +261,15 @@ pub fn list_sales(state: State<AppState>) -> Result<Vec<SaleListItem>, String> {
 /// (`resolve_admin_authorization`): self-authorizes if the active session is
 /// already Admin, otherwise needs a *different* admin's password. Reverses
 /// the stock decrement (`refund`-type `stock_movements` rows) for every line
-/// whose item still exists, and — if this was a Crediário sale with a "Valor
-/// pago agora" down payment — soft-cancels that `credit_payments` row too, so
-/// the client's balance calculation (which only sums `completed` sales) isn't
-/// left double-crediting a payment for a debt that no longer exists.
+/// whose item still exists.
+///
+/// Never touches `credit_payments`/`credit_payment_allocations`, even if this
+/// was a Crediário sale that already had money applied to it (at sale time or
+/// later, via Devedores): that amount simply becomes floating credit for the
+/// client once this sale drops out of the completed-sales sum behind
+/// `client_balance` — decided over auto-reversing it (a prior version of this
+/// command did auto-cancel a "Valor pago agora" down payment here, to avoid
+/// exactly this negative/credit balance).
 #[tauri::command]
 pub fn cancel_sale(
     state: State<AppState>,
@@ -307,15 +315,6 @@ pub fn cancel_sale(
         )
         .map_err(|e| e.to_string())?;
 
-        tx.execute(
-            "UPDATE credit_payments
-             SET cancelled_at = datetime('now'), cancelled_by_user_id = ?1, cancel_authorized_by_user_id = ?2,
-                 cancel_reason = 'Estorno da venda que gerou este pagamento'
-             WHERE sale_id = ?3 AND cancelled_at IS NULL",
-            params![requester_id, authorized_by, sale_id],
-        )
-        .map_err(|e| e.to_string())?;
-
         tx.commit().map_err(|e| e.to_string())?;
     }
 
@@ -341,7 +340,8 @@ pub fn create_sale(
     payment_method: String,
     client_id: Option<i64>,
     // Only meaningful when `payment_method == "credit"` — the customer
-    // already has part of the money on hand, so a `credit_payments` row is
+    // already has part of the money on hand, so a `credit_payments` row (with
+    // a `credit_payment_allocations` row pointing back at this sale) is
     // recorded in the same transaction as the sale, immediately reducing
     // the open balance below the full `total`.
     credit_paid_now: Option<f64>,
@@ -396,15 +396,28 @@ pub fn create_sale(
     let general_discount_amount = if general_discount_value > 0.0 { Some(general_discount_value) } else { None };
     let credit_paid_now = credit_paid_now.map(round2);
     if let Some(paid) = credit_paid_now {
-        // Strictly less than `total`, never equal: a Crediário sale is
-        // supposed to leave an open balance — paying it off in full at the
+        // Normally strictly less than `total`, never equal: a Crediário sale
+        // is supposed to leave an open balance — paying it off in full at the
         // same moment belongs to a different payment method entirely (cash,
-        // card, PIX), not this one.
+        // card, PIX), not this one. The one exception: a client who already
+        // has store credit (a negative balance, e.g. from a paid sale that
+        // was later cancelled) has that credit applied to this sale
+        // automatically, and it's allowed to cover the total exactly — that's
+        // the client's own money settling itself, not someone typing the full
+        // amount as a workaround. Re-checked against the DB here rather than
+        // trusting the frontend's math, same reasoning as every other
+        // server-side validation in this command.
         if paid >= total {
-            return Err(
-                "Valor pago agora deve ser menor que o total da venda — para pagamento total, escolha outra forma de pagamento"
-                    .to_string(),
-            );
+            let available_credit = match client_balance(&conn, client_id.unwrap()) {
+                Ok(balance) if balance < 0.0 => round2(-balance),
+                _ => 0.0,
+            };
+            if paid > available_credit {
+                return Err(
+                    "Valor pago agora deve ser menor que o total da venda — para pagamento total, escolha outra forma de pagamento"
+                        .to_string(),
+                );
+            }
         }
     }
 
@@ -484,8 +497,14 @@ pub fn create_sale(
 
         if let Some(paid) = credit_paid_now {
             tx.execute(
-                "INSERT INTO credit_payments (client_id, amount, user_id, sale_id) VALUES (?1, ?2, ?3, ?4)",
-                params![client_id.unwrap(), paid, cashier_id, sale_id],
+                "INSERT INTO credit_payments (client_id, amount, user_id) VALUES (?1, ?2, ?3)",
+                params![client_id.unwrap(), paid, cashier_id],
+            )
+            .map_err(|e| e.to_string())?;
+            let payment_id = tx.last_insert_rowid();
+            tx.execute(
+                "INSERT INTO credit_payment_allocations (payment_id, sale_id, amount) VALUES (?1, ?2, ?3)",
+                params![payment_id, sale_id, paid],
             )
             .map_err(|e| e.to_string())?;
         }

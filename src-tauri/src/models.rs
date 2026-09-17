@@ -108,12 +108,11 @@ pub struct SaleDetail {
     /// lodged against (see `commands::clients`).
     pub client_id: Option<i64>,
     pub client_name: Option<String>,
-    /// Amount of the Crediário debt paid off already, at sale time (the
-    /// customer had part of the money on hand) — a `credit_payments` row
-    /// linked to this sale via `sale_id`. `None` when nothing was paid up
-    /// front (the whole `total` sits as open balance) or the sale isn't
-    /// Crediário at all.
-    pub credit_paid_now: Option<f64>,
+    /// Amount of the Crediário debt paid off so far for this specific sale —
+    /// sum of active `credit_payment_allocations` targeting it, whether paid
+    /// at sale time ("Valor pago agora") or later through Devedores. `None`
+    /// when nothing has been paid on it yet, or the sale isn't Crediário.
+    pub credit_paid: Option<f64>,
     /// The four `cancelled_*`/`cancel_*` fields below are only set once the
     /// sale has been cancelled/estornada — never deleted, see
     /// `commands::sales::cancel_sale`.
@@ -166,9 +165,24 @@ pub struct CreditSaleSummary {
     pub receipt_number: String,
     pub created_at: String,
     pub total: f64,
+    /// Sum of active (non-cancelled-payment) `credit_payment_allocations` for
+    /// this sale — `total - paid` is what's still owed on it specifically.
+    pub paid: f64,
+    pub remaining: f64,
     /// `"completed"` or `"cancelled"` — so Devedores can flag a reversed sale
     /// without needing to open "Ver venda" to find out.
     pub status: String,
+}
+
+/// One sale a `credit_payments` row was allocated to, with how much of that
+/// payment went to it — a payment can span multiple sales (see
+/// `commands::clients::register_credit_payment`).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CreditPaymentAllocationSummary {
+    pub sale_id: i64,
+    pub receipt_number: String,
+    pub amount: f64,
 }
 
 #[derive(Serialize, Clone)]
@@ -178,6 +192,7 @@ pub struct CreditPaymentSummary {
     pub amount: f64,
     pub user_name: String,
     pub created_at: String,
+    pub allocations: Vec<CreditPaymentAllocationSummary>,
     /// The four `cancelled_*` fields below are only set once the payment has
     /// been soft-cancelled (never deleted) — see `commands::clients::cancel_credit_payment`.
     pub cancelled_at: Option<String>,
