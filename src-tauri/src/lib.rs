@@ -71,9 +71,18 @@ pub fn run() {
             commands::config::set_receipt_thank_you_message,
             commands::users::list_admins,
             commands::sales::create_sale,
+            commands::sales::get_sale_detail,
             commands::receipts::regenerate_receipt_pdf,
             commands::receipts::print_file,
             commands::receipts::open_receipts_folder,
+            commands::clients::list_clients,
+            commands::clients::create_client,
+            commands::clients::update_client,
+            commands::clients::get_client_detail,
+            commands::clients::register_credit_payment,
+            commands::clients::cancel_credit_payment,
+            commands::config::get_credit_enabled,
+            commands::config::set_credit_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

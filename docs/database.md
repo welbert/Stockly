@@ -135,10 +135,17 @@ Modeled as its own table from day one specifically so a future split-payment fea
 | `client_id` | INTEGER NOT NULL → `clients(id)` | |
 | `amount` | REAL, `CHECK (> 0)` | partial or full — any amount up to the current balance |
 | `user_id` | INTEGER NOT NULL → `users(id)` | who registered it (no Admin password required) |
+| `sale_id` | INTEGER NULL → `sales(id)` | only set when this payment came from the "Valor pago agora" step of `create_sale` (a Crediário sale where the customer already had part of the money) — `NULL` for every payment registered later through Devedores' "Registrar pagamento" |
+| `cancelled_at` | TEXT NULL | soft-cancel of a mistakenly-registered payment — never deleted. `NULL` = still active |
+| `cancelled_by_user_id` | INTEGER NULL → `users(id)` | who requested the cancellation |
+| `cancel_authorized_by_user_id` | INTEGER NULL → `users(id)` | which Admin authorized it (same "self-authorizes if already Admin, otherwise a *different* admin's password" rule as discount/cancel-sale — unlike registering the payment itself, which needs no admin password) |
+| `cancel_reason` | TEXT NULL | required by the command layer once cancelling, shown as "Pagamento cancelado por X devido a Y" |
 | `created_at` | TEXT | |
+
+A client's open balance only sums `amount` where `cancelled_at IS NULL` (see `commands::clients::client_balance`) — cancelling a payment is what makes the balance go back up, no separate reversal entry needed.
 
 ### `config` — generic key/value
 ```
 config(key TEXT PRIMARY KEY, value TEXT NOT NULL)
 ```
-No rows are seeded — `commands::config`'s getters fall back to a default in code when the key is absent rather than seeding a row. Keys in use: `low_stock_warning_percent` (the global "yellow chip" threshold, defaults to `20`), `default_profit_margin_percent` (suggests `sale_price` on item creation as `cost_price * (1 + percent / 100)`, defaults to `30`; Admin-only, editable in Configurações), `store_name` and `store_info` (both default to `""`; feed the receipt header — see `commands::receipts` — falling back to "BORA VENDER" with no extra lines when empty), `receipt_thank_you_message` (defaults to `"Obrigado pela preferência!"` — unlike the two above, this one's default *is* real content, not an empty-means-fallback value). Expected as later features land: `backup_folder` (chosen backup destination) and whether Crediário is enabled as a payment method (can only be turned off while no client has an open balance, per `docs/future.md`).
+No rows are seeded — `commands::config`'s getters fall back to a default in code when the key is absent rather than seeding a row. Keys in use: `low_stock_warning_percent` (the global "yellow chip" threshold, defaults to `20`), `default_profit_margin_percent` (suggests `sale_price` on item creation as `cost_price * (1 + percent / 100)`, defaults to `30`; Admin-only, editable in Configurações), `store_name` and `store_info` (both default to `""`; feed the receipt header — see `commands::receipts` — falling back to "BORA VENDER" with no extra lines when empty), `receipt_thank_you_message` (defaults to `"Obrigado pela preferência!"` — unlike the two above, this one's default *is* real content, not an empty-means-fallback value), `credit_enabled` (`"0"`/`"1"`, defaults to enabled when absent — Admin-only, `set_credit_enabled` refuses `"0"` while any client has an open balance, see `commands::clients::has_open_debtors`). Expected as later features land: `backup_folder` (chosen backup destination).

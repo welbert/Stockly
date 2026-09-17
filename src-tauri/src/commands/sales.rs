@@ -2,10 +2,10 @@ use crate::guard::{active_user_id, resolve_admin_authorization};
 use crate::models::{SaleDetail, SaleItemDetail, SaleItemInput};
 use crate::money::round2;
 use crate::AppState;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use tauri::State;
 
-const VALID_PAYMENT_METHODS: &[&str] = &["cash", "card", "pix"];
+const VALID_PAYMENT_METHODS: &[&str] = &["cash", "card", "pix", "credit"];
 
 struct PreparedLine {
     item_id: i64,
@@ -100,7 +100,20 @@ pub(crate) fn fetch_sale_detail(
     receipt_pdf_path: Option<String>,
 ) -> Result<SaleDetail, String> {
     #[allow(clippy::type_complexity)]
-    let (receipt_number, user_id, user_name, subtotal, discount_percent, discount_amount, discount_authorized_by_name, total, status, created_at): (
+    let (
+        receipt_number,
+        user_id,
+        user_name,
+        subtotal,
+        discount_percent,
+        discount_amount,
+        discount_authorized_by_name,
+        total,
+        status,
+        client_id,
+        client_name,
+        created_at,
+    ): (
         String,
         i64,
         String,
@@ -110,13 +123,16 @@ pub(crate) fn fetch_sale_detail(
         Option<String>,
         f64,
         String,
+        Option<i64>,
+        Option<String>,
         String,
     ) = conn
         .query_row(
-            "SELECT s.receipt_number, s.user_id, u.name, s.subtotal, s.discount_percent, s.discount_amount, a.name, s.total, s.status, s.created_at
+            "SELECT s.receipt_number, s.user_id, u.name, s.subtotal, s.discount_percent, s.discount_amount, a.name, s.total, s.status, s.client_id, c.name, s.created_at
              FROM sales s
              JOIN users u ON u.id = s.user_id
              LEFT JOIN users a ON a.id = s.discount_authorized_by_user_id
+             LEFT JOIN clients c ON c.id = s.client_id
              WHERE s.id = ?1",
             params![sale_id],
             |row| {
@@ -131,6 +147,8 @@ pub(crate) fn fetch_sale_detail(
                     row.get(7)?,
                     row.get(8)?,
                     row.get(9)?,
+                    row.get(10)?,
+                    row.get(11)?,
                 ))
             },
         )
@@ -141,6 +159,15 @@ pub(crate) fn fetch_sale_detail(
             row.get(0)
         })
         .map_err(|e| e.to_string())?;
+
+    let credit_paid_now: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(amount), 0) FROM credit_payments WHERE sale_id = ?1 AND cancelled_at IS NULL",
+            params![sale_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let credit_paid_now = if credit_paid_now > 0.0 { Some(credit_paid_now) } else { None };
 
     let items = fetch_sale_items(conn, sale_id)?;
 
@@ -156,10 +183,22 @@ pub(crate) fn fetch_sale_detail(
         total,
         status,
         payment_method,
+        client_id,
+        client_name,
+        credit_paid_now,
         created_at,
         items,
         receipt_pdf_path,
     })
+}
+
+/// Read-only sale lookup — used by "Ver venda" (Devedores' linked-sale
+/// detail), which doesn't need a fresh PDF, just the stored facts.
+#[tauri::command]
+pub fn get_sale_detail(state: State<AppState>, sale_id: i64) -> Result<SaleDetail, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    active_user_id(&state)?;
+    fetch_sale_detail(&conn, sale_id, None)
 }
 
 /// The core PDV action: validates stock, computes subtotal/discounts/total
@@ -179,6 +218,12 @@ pub fn create_sale(
     discount_authorizer_id: Option<i64>,
     discount_authorizer_password: Option<String>,
     payment_method: String,
+    client_id: Option<i64>,
+    // Only meaningful when `payment_method == "credit"` — the customer
+    // already has part of the money on hand, so a `credit_payments` row is
+    // recorded in the same transaction as the sale, immediately reducing
+    // the open balance below the full `total`.
+    credit_paid_now: Option<f64>,
 ) -> Result<SaleDetail, String> {
     if items.is_empty() {
         return Err("A venda precisa ter pelo menos um item".to_string());
@@ -186,9 +231,22 @@ pub fn create_sale(
     if !VALID_PAYMENT_METHODS.contains(&payment_method.as_str()) {
         return Err("Forma de pagamento inválida".to_string());
     }
+    let client_id = if payment_method == "credit" { client_id } else { None };
+    if payment_method == "credit" && client_id.is_none() {
+        return Err("Selecione um cliente para Crediário".to_string());
+    }
+    let credit_paid_now = if payment_method == "credit" { credit_paid_now.filter(|v| *v > 0.0) } else { None };
 
     let mut conn = state.db.lock().map_err(|e| e.to_string())?;
     let cashier_id = active_user_id(&state)?;
+
+    if let Some(id) = client_id {
+        let exists: Option<i64> =
+            conn.query_row("SELECT id FROM clients WHERE id = ?1", params![id], |row| row.get(0)).optional().map_err(|e| e.to_string())?;
+        if exists.is_none() {
+            return Err("Cliente não encontrado".to_string());
+        }
+    }
 
     let prepared: Vec<PreparedLine> = items.iter().map(|i| prepare_line(&conn, i)).collect::<Result<_, _>>()?;
     let subtotal_total = round2(prepared.iter().map(|l| l.subtotal).sum());
@@ -215,6 +273,19 @@ pub fn create_sale(
     }
     let total = round2(subtotal_total - general_discount_value);
     let general_discount_amount = if general_discount_value > 0.0 { Some(general_discount_value) } else { None };
+    let credit_paid_now = credit_paid_now.map(round2);
+    if let Some(paid) = credit_paid_now {
+        // Strictly less than `total`, never equal: a Crediário sale is
+        // supposed to leave an open balance — paying it off in full at the
+        // same moment belongs to a different payment method entirely (cash,
+        // card, PIX), not this one.
+        if paid >= total {
+            return Err(
+                "Valor pago agora deve ser menor que o total da venda — para pagamento total, escolha outra forma de pagamento"
+                    .to_string(),
+            );
+        }
+    }
 
     let has_discount =
         general_discount_amount.is_some() || prepared.iter().any(|l| l.discount_amount.is_some());
@@ -237,12 +308,13 @@ pub fn create_sale(
         let receipt_number = format!("{today}{next_sequential:06}");
 
         tx.execute(
-            "INSERT INTO sales (receipt_sequential, receipt_number, user_id, subtotal, discount_percent, discount_amount, discount_authorized_by_user_id, discount_authorized_at, total, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'completed')",
+            "INSERT INTO sales (receipt_sequential, receipt_number, user_id, client_id, subtotal, discount_percent, discount_amount, discount_authorized_by_user_id, discount_authorized_at, total, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'completed')",
             params![
                 next_sequential,
                 receipt_number,
                 cashier_id,
+                client_id,
                 subtotal_total,
                 discount_percent,
                 general_discount_amount,
@@ -288,6 +360,14 @@ pub fn create_sale(
             params![sale_id, payment_method, total],
         )
         .map_err(|e| e.to_string())?;
+
+        if let Some(paid) = credit_paid_now {
+            tx.execute(
+                "INSERT INTO credit_payments (client_id, amount, user_id, sale_id) VALUES (?1, ?2, ?3, ?4)",
+                params![client_id.unwrap(), paid, cashier_id, sale_id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
 
         tx.commit().map_err(|e| e.to_string())?;
         sale_id

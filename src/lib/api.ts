@@ -231,7 +231,7 @@ export function listAdmins() {
   return call<UserSummary[]>("list_admins");
 }
 
-export type PaymentMethod = "cash" | "card" | "pix";
+export type PaymentMethod = "cash" | "card" | "pix" | "credit";
 
 export type SaleItemInput = {
   itemId: number;
@@ -263,6 +263,12 @@ export type SaleDetail = {
   total: number;
   status: string;
   paymentMethod: PaymentMethod;
+  /** Only set when `paymentMethod === "credit"`. */
+  clientId: number | null;
+  clientName: string | null;
+  /** Amount of the Crediário debt already paid off at sale time, if any —
+   * `null` when nothing was paid up front (the whole `total` is open balance). */
+  creditPaidNow: number | null;
   createdAt: string;
   items: SaleItemDetail[];
   receiptPdfPath: string | null;
@@ -282,8 +288,16 @@ export function createSale(input: {
   discountAuthorizerId: number | null;
   discountAuthorizerPassword: string | null;
   paymentMethod: PaymentMethod;
+  clientId: number | null;
+  /** Only used when `paymentMethod === "credit"` — how much the client
+   * already paid up front, reducing the Crediário balance this sale opens. */
+  creditPaidNow: number | null;
 }) {
   return call<SaleDetail>("create_sale", input);
+}
+
+export function getSaleDetail(saleId: number) {
+  return call<SaleDetail>("get_sale_detail", { saleId });
 }
 
 export function regenerateReceiptPdf(saleId: number) {
@@ -296,4 +310,92 @@ export function printFile(path: string) {
 
 export function openReceiptsFolder() {
   return call<void>("open_receipts_folder");
+}
+
+export type ClientSummary = {
+  id: number;
+  name: string;
+  phone: string | null;
+  reminderDate: string | null;
+  note: string | null;
+  /** Saldo em Crediário em aberto — vendas creditadas menos pagamentos já registrados. */
+  balance: number;
+};
+
+export type CreditSaleSummary = {
+  saleId: number;
+  receiptNumber: string;
+  createdAt: string;
+  total: number;
+};
+
+export type CreditPaymentSummary = {
+  id: number;
+  amount: number;
+  userName: string;
+  createdAt: string;
+  /** Só preenchidos quando o pagamento foi cancelado (soft-cancel, nunca apagado). */
+  cancelledAt: string | null;
+  cancelledByName: string | null;
+  cancelAuthorizedByName: string | null;
+  cancelReason: string | null;
+};
+
+export type ClientDetail = ClientSummary & {
+  creditSales: CreditSaleSummary[];
+  payments: CreditPaymentSummary[];
+};
+
+/** Todos os clientes, cada um já com o saldo calculado — filtragem/ordenação
+ * (ex.: só devedores com saldo > 0, busca por nome) acontece no frontend,
+ * mesmo padrão de `listItems`. */
+export function listClients() {
+  return call<ClientSummary[]>("list_clients");
+}
+
+export function createClient(input: { name: string; phone: string | null; reminderDate: string | null; note: string | null }) {
+  return call<ClientSummary>("create_client", input);
+}
+
+/** Renaming a client with an open Crediário balance requires admin
+ * authorization (same pattern as `createSale`'s discount/cancel authorization) —
+ * `authorizerId`/`authorizerPassword` are only used in that case. */
+export function updateClient(input: {
+  id: number;
+  name: string;
+  phone: string | null;
+  reminderDate: string | null;
+  note: string | null;
+  authorizerId: number | null;
+  authorizerPassword: string | null;
+}) {
+  return call<ClientSummary>("update_client", input);
+}
+
+export function getClientDetail(id: number) {
+  return call<ClientDetail>("get_client_detail", { id });
+}
+
+export function registerCreditPayment(clientId: number, amount: number) {
+  return call<ClientDetail>("register_credit_payment", { clientId, amount });
+}
+
+/** Soft-cancel — não apaga o pagamento, marca com motivo. Reverte um valor
+ * financeiro, então exige autorização de administrador (mesmo padrão de
+ * `createSale`'s discount/cancel authorization). */
+export function cancelCreditPayment(input: {
+  paymentId: number;
+  reason: string;
+  authorizerId: number | null;
+  authorizerPassword: string | null;
+}) {
+  return call<ClientDetail>("cancel_credit_payment", input);
+}
+
+export function getCreditEnabled() {
+  return call<boolean>("get_credit_enabled");
+}
+
+export function setCreditEnabled(enabled: boolean) {
+  return call<void>("set_credit_enabled", { enabled });
 }

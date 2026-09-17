@@ -1,3 +1,4 @@
+use crate::commands::clients::has_open_debtors;
 use crate::guard::{active_user_id, require_admin};
 use crate::AppState;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -141,4 +142,30 @@ pub fn set_receipt_thank_you_message(state: State<AppState>, message: String) ->
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     require_admin(&state, &conn)?;
     set_config_string(&conn, RECEIPT_THANK_YOU_KEY, message.trim())
+}
+
+const CREDIT_ENABLED_KEY: &str = "credit_enabled";
+
+/// Both roles read this — it decides whether "Crediário" shows up as a
+/// payment method in Venda. Enabled by default (no row yet = "1").
+#[tauri::command]
+pub fn get_credit_enabled(state: State<AppState>) -> Result<bool, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    active_user_id(&state)?;
+    let value = config_string(&conn, CREDIT_ENABLED_KEY)?;
+    Ok(value != "0")
+}
+
+/// Admin-only, and blocked while any client still has an open Crediário
+/// balance — same "reconfirmation not needed, but must be structurally safe"
+/// spirit as the other Configurações locks (see `Plans/PLANO.md`, "Crediário
+/// e Devedores" > "trava de desativação").
+#[tauri::command]
+pub fn set_credit_enabled(state: State<AppState>, enabled: bool) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    require_admin(&state, &conn)?;
+    if !enabled && has_open_debtors(&conn)? {
+        return Err("Não é possível desativar: existem devedores com saldo em aberto".to_string());
+    }
+    set_config_string(&conn, CREDIT_ENABLED_KEY, if enabled { "1" } else { "0" })
 }

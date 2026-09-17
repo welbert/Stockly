@@ -7,7 +7,7 @@ import { Kbd } from "./Kbd";
 import { Modal } from "./Modal";
 import { logger } from "../logger";
 
-const PAYMENT_LABEL: Record<string, string> = { cash: "Dinheiro", card: "Cartão", pix: "PIX" };
+const PAYMENT_LABEL: Record<string, string> = { cash: "Dinheiro", card: "Cartão", pix: "PIX", credit: "Crediário" };
 
 interface ReceiptResultModalProps {
   sale: SaleDetail;
@@ -100,6 +100,7 @@ export function ReceiptResultModal({ sale, storeName, storeInfo, thankYouMessage
         <div>Recibo: {sale.receiptNumber}</div>
         <div>Data: {fmtDateTime(sale.createdAt)}</div>
         <div>Operador: {sale.userName}</div>
+        {sale.clientName && <div>Cliente (Crediário): {sale.clientName}</div>}
         <hr className="my-2 border-dashed border-theme-border" />
         {sale.items.map((item, i) => (
           <div key={i} className="flex justify-between gap-2">
@@ -129,6 +130,18 @@ export function ReceiptResultModal({ sale, storeName, storeInfo, thankYouMessage
           <span>TOTAL</span>
           <span>{fmt(sale.total)}</span>
         </div>
+        {sale.creditPaidNow !== null && (
+          <>
+            <div className="flex justify-between">
+              <span>Valor pago agora</span>
+              <span>{fmt(sale.creditPaidNow)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Saldo Crediário</span>
+              <span>{fmt(sale.total - sale.creditPaidNow)}</span>
+            </div>
+          </>
+        )}
         {sale.discountAuthorizedByName && (
           <p className="mt-1 italic text-theme-3">Descontos autorizados por: {sale.discountAuthorizedByName}</p>
         )}

@@ -107,11 +107,16 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_stock_movements_item ON stock_movements(item_id);
 
         CREATE TABLE IF NOT EXISTS credit_payments (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id   INTEGER NOT NULL REFERENCES clients(id),
-            amount      REAL    NOT NULL CHECK (amount > 0),
-            user_id     INTEGER NOT NULL REFERENCES users(id),
-            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            id                           INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id                    INTEGER NOT NULL REFERENCES clients(id),
+            amount                       REAL    NOT NULL CHECK (amount > 0),
+            user_id                      INTEGER NOT NULL REFERENCES users(id),
+            sale_id                      INTEGER NULL REFERENCES sales(id),
+            cancelled_at                 TEXT    NULL,
+            cancelled_by_user_id         INTEGER NULL REFERENCES users(id),
+            cancel_authorized_by_user_id INTEGER NULL REFERENCES users(id),
+            cancel_reason                TEXT    NULL,
+            created_at                   TEXT    NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_credit_payments_client ON credit_payments(client_id);
 
@@ -125,6 +130,11 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
 fn migrate_db(conn: &Connection) {
     // Seguro rodar a cada início — o erro de "coluna já existe" é ignorado.
     let _ = conn.execute("ALTER TABLE users ADD COLUMN last_login_at TEXT NULL", []);
+    let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN cancelled_at TEXT NULL", []);
+    let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN cancelled_by_user_id INTEGER NULL REFERENCES users(id)", []);
+    let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN cancel_authorized_by_user_id INTEGER NULL REFERENCES users(id)", []);
+    let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN cancel_reason TEXT NULL", []);
+    let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN sale_id INTEGER NULL REFERENCES sales(id)", []);
 }
 
 /// In-memory connection with the schema applied — reused by other modules'

@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import type { ItemSummary, PaymentMethod, SaleDetail, UserSummary } from "../lib/api";
-import { createSale, getReceiptThankYouMessage, getStoreInfo, getStoreName, listAdmins, listItems, round2 } from "../lib/api";
+import {
+  createSale,
+  getCreditEnabled,
+  getReceiptThankYouMessage,
+  getStoreInfo,
+  getStoreName,
+  listAdmins,
+  listItems,
+  round2,
+} from "../lib/api";
 import { Button } from "../components/Button";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { DiscountModal, type DiscountResult } from "../components/DiscountModal";
@@ -71,6 +80,7 @@ export function SalesPage() {
   const [storeName, setStoreName] = useState("");
   const [storeInfo, setStoreInfo] = useState("");
   const [thankYouMessage, setThankYouMessage] = useState("");
+  const [creditEnabled, setCreditEnabled] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   function reload() {
@@ -93,6 +103,9 @@ export function SalesPage() {
     getReceiptThankYouMessage()
       .then(setThankYouMessage)
       .catch((err) => logger.error("falha ao ler mensagem de agradecimento do recibo", err));
+    getCreditEnabled()
+      .then(setCreditEnabled)
+      .catch((err) => logger.error("falha ao ler se o Crediário está habilitado", err));
   }, []);
 
   useEffect(() => {
@@ -212,7 +225,7 @@ export function SalesPage() {
     setDiscountTarget(null);
   }
 
-  async function handleFinalize(method: PaymentMethod) {
+  async function handleFinalize(method: PaymentMethod, clientId: number | null, creditPaidNow: number | null) {
     setSubmittingSale(true);
     setSaleError(null);
     try {
@@ -228,6 +241,8 @@ export function SalesPage() {
         discountAuthorizerId: saleAuth?.authorizerId ?? null,
         discountAuthorizerPassword: saleAuth?.password ?? null,
         paymentMethod: method,
+        clientId,
+        creditPaidNow,
       });
       setCompletedSale(sale);
       setShowPayment(false);
@@ -582,6 +597,7 @@ export function SalesPage() {
           total={total}
           submitting={submittingSale}
           error={saleError}
+          creditEnabled={creditEnabled}
           onConfirm={handleFinalize}
           onClose={() => setShowPayment(false)}
         />

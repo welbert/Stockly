@@ -104,10 +104,72 @@ pub struct SaleDetail {
     pub total: f64,
     pub status: String,
     pub payment_method: String,
+    /// Only set when `payment_method == "credit"` — the client the debt was
+    /// lodged against (see `commands::clients`).
+    pub client_id: Option<i64>,
+    pub client_name: Option<String>,
+    /// Amount of the Crediário debt paid off already, at sale time (the
+    /// customer had part of the money on hand) — a `credit_payments` row
+    /// linked to this sale via `sale_id`. `None` when nothing was paid up
+    /// front (the whole `total` sits as open balance) or the sale isn't
+    /// Crediário at all.
+    pub credit_paid_now: Option<f64>,
     pub created_at: String,
     pub items: Vec<SaleItemDetail>,
     /// `None` when the PDF failed to generate right after the sale committed
     /// (disk full, permission, ...) — the sale itself is still valid either
     /// way; the frontend offers "gerar recibo" again in that case.
     pub receipt_pdf_path: Option<String>,
+}
+
+/// A client ("devedor") with their computed Crediário balance — used both by
+/// the Devedores listing (filtered client-side to `balance > 0`, mirroring
+/// how Estoque filters `list_items` client-side) and by the client picker
+/// inside the Venda payment modal (all clients, matched by name).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientSummary {
+    pub id: i64,
+    pub name: String,
+    pub phone: Option<String>,
+    pub reminder_date: Option<String>,
+    pub note: Option<String>,
+    pub balance: f64,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CreditSaleSummary {
+    pub sale_id: i64,
+    pub receipt_number: String,
+    pub created_at: String,
+    pub total: f64,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CreditPaymentSummary {
+    pub id: i64,
+    pub amount: f64,
+    pub user_name: String,
+    pub created_at: String,
+    /// The four `cancelled_*` fields below are only set once the payment has
+    /// been soft-cancelled (never deleted) — see `commands::clients::cancel_credit_payment`.
+    pub cancelled_at: Option<String>,
+    pub cancelled_by_name: Option<String>,
+    pub cancel_authorized_by_name: Option<String>,
+    pub cancel_reason: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientDetail {
+    pub id: i64,
+    pub name: String,
+    pub phone: Option<String>,
+    pub reminder_date: Option<String>,
+    pub note: Option<String>,
+    pub balance: f64,
+    pub credit_sales: Vec<CreditSaleSummary>,
+    pub payments: Vec<CreditPaymentSummary>,
 }

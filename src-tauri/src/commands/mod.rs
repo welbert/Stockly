@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod categories;
+pub mod clients;
 pub mod config;
 pub mod items;
 pub mod logging;

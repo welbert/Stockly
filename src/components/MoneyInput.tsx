@@ -9,6 +9,13 @@ type Props = {
   className?: string;
   /** Destaca a borda em amarelo (ex.: preço de venda abaixo do custo) — um aviso que não impede salvar. */
   warning?: boolean;
+  /** Trava o valor digitado nesse teto em vez de deixar passar — ex.: valor de
+   * pagamento não pode ultrapassar o saldo em aberto. Precisa ser clampado
+   * aqui dentro (não via `value`/`onChange` de fora): o buffer de dígitos é
+   * quem decide o que aparece na tela, e se o valor externo parar de mudar
+   * (já no teto), o efeito de ressincronização abaixo nunca mais dispara —
+   * o buffer ficaria livre pra continuar crescendo com cada tecla nova. */
+  max?: number;
 };
 
 const MAX_DIGITS = 15;
@@ -32,7 +39,7 @@ function formatDigits(digits: string): string {
  * Use este componente em qualquer input de R$ do app para manter o comportamento idêntico
  * (mesmo padrão do MoneyInput do CashVault).
  */
-export function MoneyInput({ value, onChange, placeholder, autoFocus, id, className = "", warning }: Props) {
+export function MoneyInput({ value, onChange, placeholder, autoFocus, id, className = "", warning, max }: Props) {
   const [digits, setDigits] = useState(() => centsToDigits(value));
   const lastEmitted = useRef(value);
 
@@ -48,10 +55,11 @@ export function MoneyInput({ value, onChange, placeholder, autoFocus, id, classN
 
   function commit(next: string) {
     const trimmed = next.slice(-MAX_DIGITS);
-    setDigits(trimmed);
     const parsed = digitsToValue(trimmed);
-    lastEmitted.current = parsed;
-    onChange(parsed);
+    const clamped = max !== undefined && parsed > max ? max : parsed;
+    setDigits(clamped === parsed ? trimmed : centsToDigits(clamped));
+    lastEmitted.current = clamped;
+    onChange(clamped);
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {

@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
   effectiveAutoLockMinutes,
+  getCreditEnabled,
   getDefaultProfitMargin,
   getLowStockPercent,
   getReceiptThankYouMessage,
   getStoreInfo,
   getStoreName,
+  setCreditEnabled,
   setDefaultProfitMargin,
   setLowStockPercent,
   setReceiptThankYouMessage,
@@ -15,6 +17,7 @@ import {
   updateMyAutoLock,
 } from "../lib/api";
 import { Card } from "../components/Card";
+import { Checkbox } from "../components/Checkbox";
 import { ThemeSwitcher } from "../components/ThemeSwitcher";
 import { logger } from "../logger";
 
@@ -35,6 +38,8 @@ export function SettingsPage() {
   const [storeName, setStoreNameState] = useState<string | null>(null);
   const [storeInfo, setStoreInfoState] = useState<string | null>(null);
   const [thankYouMessage, setThankYouMessageState] = useState<string | null>(null);
+  const [creditEnabled, setCreditEnabledState] = useState<boolean | null>(null);
+  const [creditError, setCreditError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.isAdmin) {
@@ -53,6 +58,9 @@ export function SettingsPage() {
       getReceiptThankYouMessage()
         .then(setThankYouMessageState)
         .catch((err) => logger.error("falha ao ler mensagem de agradecimento do recibo", err));
+      getCreditEnabled()
+        .then(setCreditEnabledState)
+        .catch((err) => logger.error("falha ao ler se o Crediário está habilitado", err));
     }
   }, [user]);
 
@@ -109,6 +117,17 @@ export function SettingsPage() {
       await setReceiptThankYouMessage(thankYouMessage);
     } catch (err) {
       logger.error("falha ao salvar mensagem de agradecimento do recibo", err);
+    }
+  }
+
+  async function handleCreditEnabledChange(value: boolean) {
+    setCreditError(null);
+    try {
+      await setCreditEnabled(value);
+      setCreditEnabledState(value);
+    } catch (err) {
+      logger.error("falha ao alterar disponibilidade do Crediário", err);
+      setCreditError(String(err));
     }
   }
 
@@ -175,6 +194,16 @@ export function SettingsPage() {
           <p className="mt-2.5 text-xs text-theme-3">
             Ao cadastrar um item novo, o preço de venda é sugerido automaticamente (custo + esse percentual) — ainda
             editável antes de salvar.
+          </p>
+        </Card>
+      )}
+
+      {user.isAdmin && creditEnabled !== null && (
+        <Card title="Crediário">
+          <Checkbox label="Aceitar Crediário como forma de pagamento" checked={creditEnabled} onChange={handleCreditEnabledChange} />
+          {creditError && <p className="mt-2 text-xs text-danger">{creditError}</p>}
+          <p className="mt-2.5 text-xs text-theme-3">
+            Só pode ser desativado se não houver nenhum devedor com saldo em aberto (tela Devedores).
           </p>
         </Card>
       )}

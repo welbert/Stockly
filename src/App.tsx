@@ -3,6 +3,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { AuthGate } from "./components/layout/AuthGate";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import { DevedoresPage } from "./pages/DevedoresPage";
 import { InventoryPage } from "./pages/InventoryPage";
 import { SalesPage } from "./pages/SalesPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -18,6 +19,7 @@ function App() {
               <Route element={<AppShell />}>
                 <Route index element={<InventoryPage />} />
                 <Route path="venda" element={<SalesPage />} />
+                <Route path="devedores" element={<DevedoresPage />} />
                 <Route path="configuracoes" element={<SettingsPage />} />
                 <Route path="usuarios" element={<UsersPage />} />
               </Route>

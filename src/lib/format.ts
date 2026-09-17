@@ -7,6 +7,13 @@ export function fmtDate(iso: string): string {
   return `${d}/${m}`;
 }
 
+/** Same as `fmtDate` but with the year — used where the date alone (dd/mm)
+ * would be ambiguous, e.g. a client's Devedores detail header. */
+export function fmtDateFull(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
 /** Formata um `datetime('now')` do SQLite (UTC, "YYYY-MM-DD HH:MM:SS") pro
  * horário local, ex.: "16/09/2026 22:10". */
 export function fmtDateTime(sqliteDatetime: string): string {

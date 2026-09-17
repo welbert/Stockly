@@ -103,7 +103,9 @@ pub(crate) fn render_receipt_pdf(conn: &Connection, sale_id: i64, dir: &Path) ->
     let height_mm = 46.0
         + item_lines * 9.0
         + store_info_lines.len() as f64 * 4.0
-        + if sale.discount_authorized_by_name.is_some() { 5.0 } else { 0.0 };
+        + if sale.discount_authorized_by_name.is_some() { 5.0 } else { 0.0 }
+        + if sale.client_name.is_some() { 5.0 } else { 0.0 }
+        + if sale.credit_paid_now.is_some() { 10.0 } else { 0.0 };
     doc.set_paper_size((80, height_mm));
 
     doc.push(elements::Paragraph::new(store_name).aligned(Alignment::Center).styled(style::Style::new().bold()));
@@ -115,6 +117,9 @@ pub(crate) fn render_receipt_pdf(conn: &Connection, sale_id: i64, dir: &Path) ->
     doc.push(elements::Paragraph::new(format!("Recibo: {}", sale.receipt_number)));
     doc.push(elements::Paragraph::new(format!("Data: {}", fmt_local_datetime(&sale.created_at))));
     doc.push(elements::Paragraph::new(format!("Operador: {}", sale.user_name)));
+    if let Some(client_name) = &sale.client_name {
+        doc.push(elements::Paragraph::new(format!("Cliente (Crediário): {client_name}")));
+    }
     push_separator(&mut doc);
 
     for item in &sale.items {
@@ -138,6 +143,10 @@ pub(crate) fn render_receipt_pdf(conn: &Connection, sale_id: i64, dir: &Path) ->
         push_line(&mut doc, label, format!("-{}", fmt_money(amount)), false);
     }
     push_line(&mut doc, "TOTAL", fmt_money(sale.total), true);
+    if let Some(paid) = sale.credit_paid_now {
+        push_line(&mut doc, "Valor pago agora", fmt_money(paid), false);
+        push_line(&mut doc, "Saldo Crediário", fmt_money(sale.total - paid), false);
+    }
     if let Some(name) = &sale.discount_authorized_by_name {
         doc.push(elements::Paragraph::new(format!("Descontos autorizados por: {name}")).styled(style::Style::new().italic()));
     }
@@ -147,6 +156,7 @@ pub(crate) fn render_receipt_pdf(conn: &Connection, sale_id: i64, dir: &Path) ->
         "cash" => "Dinheiro",
         "card" => "Cartão",
         "pix" => "PIX",
+        "credit" => "Crediário",
         other => other,
     };
     let thank_you = config_string(conn, RECEIPT_THANK_YOU_KEY)?;
