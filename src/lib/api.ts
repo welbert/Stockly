@@ -662,6 +662,66 @@ export function cancelCreditPayment(input: {
   return call<ClientDetail>("cancel_credit_payment", input);
 }
 
+/** Global (all clients) version of `CreditSaleSummary` — every still-
+ * completed Crediário sale, used only by "Inadimplência" (`relatorios/
+ * inadimplencia-aging`) to find each client's *oldest* still-open sale
+ * (`remaining > 0`), which `listClients()`'s per-client `balance` alone
+ * can't answer. */
+export type CreditSaleReportRow = {
+  saleId: number;
+  clientId: number;
+  clientName: string;
+  receiptNumber: string;
+  createdAt: string;
+  total: number;
+  paid: number;
+  remaining: number;
+};
+
+export function listCreditSales() {
+  return call<CreditSaleReportRow[]>("list_credit_sales");
+}
+
+/** Every `credit_payments` row ever registered, across all clients (active
+ * and cancelled) — feeds both "Pagamentos recebidos" (`cancelledAt === null`)
+ * and "Pagamentos cancelados" (`cancelledAt !== null`), same "one command,
+ * filtered per report" shape as `listSales`/`listStockMovements`. */
+export type CreditPaymentReportRow = {
+  id: number;
+  clientId: number;
+  clientName: string;
+  amount: number;
+  userName: string;
+  createdAt: string;
+  cancelledAt: string | null;
+  cancelledByName: string | null;
+  cancelAuthorizedByName: string | null;
+  cancelReason: string | null;
+};
+
+export function listCreditPayments() {
+  return call<CreditPaymentReportRow[]>("list_credit_payments");
+}
+
+/** One authorized admin action, from 3 of the 4 sources `Plans/PLANO.md`'s
+ * "Autorizações de Administrador" originally listed — see
+ * `commands::audit::list_admin_authorizations`'s doc comment for why the 4th
+ * (cliente renomeado) isn't included yet. */
+export type AdminAuthorizationRow = {
+  id: string;
+  actionType: "discount" | "sale_cancel" | "payment_cancel";
+  reference: string | null;
+  clientName: string | null;
+  amount: number;
+  requestedByName: string;
+  authorizedByName: string;
+  createdAt: string;
+};
+
+export function listAdminAuthorizations() {
+  return call<AdminAuthorizationRow[]>("list_admin_authorizations");
+}
+
 export function getCreditEnabled() {
   return call<boolean>("get_credit_enabled");
 }

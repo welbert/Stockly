@@ -1,5 +1,8 @@
 use crate::guard::{active_user_id, resolve_admin_authorization};
-use crate::models::{ClientDetail, ClientSummary, CreditPaymentAllocationSummary, CreditPaymentSummary, CreditSaleSummary};
+use crate::models::{
+    ClientDetail, ClientSummary, CreditPaymentAllocationSummary, CreditPaymentReportRow, CreditPaymentSummary, CreditSaleReportRow,
+    CreditSaleSummary,
+};
 use crate::money::round2;
 use crate::AppState;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -252,6 +255,86 @@ fn fetch_client_detail(conn: &Connection, id: i64) -> Result<ClientDetail, Strin
     };
 
     Ok(ClientDetail { id, name, phone, reminder_date, note, balance: client_balance(&conn, id)?, credit_sales, payments })
+}
+
+/// Every still-completed Crediário sale, across all clients — only consumer
+/// today is the "Inadimplência" report (`relatorios/inadimplencia-aging`),
+/// which groups these by `clientId` client-side and needs each client's
+/// *oldest* sale with `remaining > 0` to compute days-overdue; `list_clients`
+/// only has the current total balance, not per-sale dates. Cancelled sales
+/// are excluded here (same as `client_balance`'s own credit-sales sum) —
+/// they never carry real debt regardless of what `remaining` would compute to.
+#[tauri::command]
+pub fn list_credit_sales(state: State<AppState>) -> Result<Vec<CreditSaleReportRow>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    active_user_id(&state)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT s.id, s.client_id, cl.name, s.receipt_number, s.created_at, s.total
+             FROM sales s
+             JOIN sale_payments sp ON sp.sale_id = s.id
+             JOIN clients cl ON cl.id = s.client_id
+             WHERE sp.payment_method = 'credit' AND s.status = 'completed'
+             ORDER BY s.created_at ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, f64>(5)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    let raw: Vec<(i64, i64, String, String, String, f64)> = rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    raw.into_iter()
+        .map(|(sale_id, client_id, client_name, receipt_number, created_at, total)| {
+            let paid = sale_paid_amount(&conn, sale_id)?;
+            Ok(CreditSaleReportRow { sale_id, client_id, client_name, receipt_number, created_at, total, paid, remaining: round2(total - paid) })
+        })
+        .collect::<Result<Vec<_>, String>>()
+}
+
+/// Every `credit_payments` row ever registered, across all clients — feeds
+/// both "Pagamentos recebidos" and "Pagamentos cancelados" (see
+/// `CreditPaymentReportRow`'s doc comment).
+#[tauri::command]
+pub fn list_credit_payments(state: State<AppState>) -> Result<Vec<CreditPaymentReportRow>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    active_user_id(&state)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT cp.id, cp.client_id, cl.name, cp.amount, u.name, cp.created_at,
+                    cp.cancelled_at, cb.name, ca.name, cp.cancel_reason
+             FROM credit_payments cp
+             JOIN clients cl ON cl.id = cp.client_id
+             JOIN users u ON u.id = cp.user_id
+             LEFT JOIN users cb ON cb.id = cp.cancelled_by_user_id
+             LEFT JOIN users ca ON ca.id = cp.cancel_authorized_by_user_id
+             ORDER BY cp.created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(CreditPaymentReportRow {
+                id: row.get(0)?,
+                client_id: row.get(1)?,
+                client_name: row.get(2)?,
+                amount: row.get(3)?,
+                user_name: row.get(4)?,
+                created_at: row.get(5)?,
+                cancelled_at: row.get(6)?,
+                cancelled_by_name: row.get(7)?,
+                cancel_authorized_by_name: row.get(8)?,
+                cancel_reason: row.get(9)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
 struct SelectedSale {

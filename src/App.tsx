@@ -8,9 +8,13 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { DevedoresPage } from "./pages/DevedoresPage";
 import { InventoryPage } from "./pages/InventoryPage";
 import { ReportPlaceholderPage } from "./pages/ReportPlaceholderPage";
+import { AutorizacoesAdminPage } from "./pages/reports/AutorizacoesAdminPage";
 import { HistoricoPrecoPage } from "./pages/reports/HistoricoPrecoPage";
+import { InadimplenciaAgingPage } from "./pages/reports/InadimplenciaAgingPage";
 import { ItensParadosPage } from "./pages/reports/ItensParadosPage";
 import { MovimentacaoEstoquePage } from "./pages/reports/MovimentacaoEstoquePage";
+import { PagamentosCanceladosPage } from "./pages/reports/PagamentosCanceladosPage";
+import { PagamentosRecebidosPage } from "./pages/reports/PagamentosRecebidosPage";
 import { VendasComparativoPeriodosPage } from "./pages/reports/VendasComparativoPeriodosPage";
 import { VendasPorCategoriaItemPage } from "./pages/reports/VendasPorCategoriaItemPage";
 import { VendasPorFormaPagamentoPage } from "./pages/reports/VendasPorFormaPagamentoPage";
@@ -53,6 +57,10 @@ function App() {
                   <Route path="relatorios/movimentacao-estoque" element={<MovimentacaoEstoquePage />} />
                   <Route path="relatorios/historico-preco" element={<HistoricoPrecoPage />} />
                   <Route path="relatorios/itens-parados" element={<ItensParadosPage />} />
+                  <Route path="relatorios/inadimplencia-aging" element={<InadimplenciaAgingPage />} />
+                  <Route path="relatorios/pagamentos-recebidos" element={<PagamentosRecebidosPage />} />
+                  <Route path="relatorios/pagamentos-cancelados" element={<PagamentosCanceladosPage />} />
+                  <Route path="relatorios/autorizacoes-admin" element={<AutorizacoesAdminPage />} />
                   <Route path="relatorios/:slug" element={<ReportPlaceholderPage />} />
                   <Route path="configuracoes" element={<SettingsPage />} />
                   <Route path="usuarios" element={<UsersPage />} />

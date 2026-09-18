@@ -439,6 +439,70 @@ pub struct ClientDetail {
     pub payments: Vec<CreditPaymentSummary>,
 }
 
+/// Global (all clients) version of `CreditSaleSummary` — every still-open
+/// Crediário sale, used only by the "Inadimplência" report's aging
+/// computation (`commands::clients::list_credit_sales`), which needs each
+/// client's *oldest* open sale date, not just their current total balance.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CreditSaleReportRow {
+    pub sale_id: i64,
+    pub client_id: i64,
+    pub client_name: String,
+    pub receipt_number: String,
+    pub created_at: String,
+    pub total: f64,
+    pub paid: f64,
+    pub remaining: f64,
+}
+
+/// Every `credit_payments` row, across all clients (active and cancelled) —
+/// feeds both "Pagamentos recebidos" (`cancelledAt === null`) and "Pagamentos
+/// cancelados" (`cancelledAt !== null`), same "one command, filtered
+/// client-side per report" shape as `list_sales`/`list_stock_movements`.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CreditPaymentReportRow {
+    pub id: i64,
+    pub client_id: i64,
+    pub client_name: String,
+    pub amount: f64,
+    pub user_name: String,
+    pub created_at: String,
+    pub cancelled_at: Option<String>,
+    pub cancelled_by_name: Option<String>,
+    pub cancel_authorized_by_name: Option<String>,
+    pub cancel_reason: Option<String>,
+}
+
+/// One authorized admin action, from one of 3 sources unioned by
+/// `commands::audit::list_admin_authorizations` — see that command's doc
+/// comment for exactly which 3, and why a 4th candidate (cliente renomeado)
+/// isn't included. `id` is synthesized (`"{actionType}-{row id}"`, e.g.
+/// `"discount-42"`) since rows come from 3 different tables with their own
+/// autoincrement ids — just a stable React key, not a real database id.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminAuthorizationRow {
+    pub id: String,
+    /// `"discount"` | `"sale_cancel"` | `"payment_cancel"`.
+    pub action_type: String,
+    /// Receipt number for `discount`/`sale_cancel`, `null` for
+    /// `payment_cancel` (a payment has no receipt of its own — `clientName`
+    /// is the reference there instead).
+    pub reference: Option<String>,
+    pub client_name: Option<String>,
+    pub amount: f64,
+    /// Who performed the underlying action (applied the discount, requested
+    /// the cancellation) — same person as `authorizedByName` when an Admin
+    /// self-authorized their own action (no separate password typed, see
+    /// `guard::resolve_admin_authorization`), different when a second admin's
+    /// password was required.
+    pub requested_by_name: String,
+    pub authorized_by_name: String,
+    pub created_at: String,
+}
+
 /// One card's position/size/visibility in a single Admin's Dashboard —
 /// `size` travels as a raw string (e.g. "2x1"), not validated against a
 /// fixed set on the backend: the vocabulary of sizes is a frontend catalog
