@@ -20,6 +20,7 @@ function formatCountdown(seconds: number): string {
  * A ordem do array já reflete a ordem visual correta pros dois papéis —
  * ver comentário em "Adding features" do CLAUDE.md antes de reordenar. */
 const NAV_ITEMS = [
+  { to: "/dashboard", label: "Dashboard", icon: "▦", adminOnly: true, group: () => "Operação" },
   { to: "/venda", label: "Venda", icon: "🛒", adminOnly: false, group: () => "Operação" },
   { to: "/", label: "Estoque", icon: "📦", adminOnly: false, group: () => "Operação" },
   { to: "/devedores", label: "Devedores", icon: "💳", adminOnly: false, group: () => "Operação" },
@@ -38,6 +39,7 @@ const NAV_ITEMS = [
  * ajustado ao que a tela realmente tem hoje. Some rota nova, some entrada aqui. */
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Estoque", subtitle: "Itens cadastrados e categorias" },
+  "/dashboard": { title: "Dashboard", subtitle: "Visão geral do estoque e das vendas" },
   "/venda": { title: "Venda", subtitle: "Registro rápido de venda, otimizado para teclado" },
   "/devedores": { title: "Devedores (Crediário)", subtitle: "Saldo em aberto, histórico de vendas fiado e pagamentos por cliente" },
   "/historico": { title: "Histórico de vendas", subtitle: "Busca por recibo, cliente ou operador, e cancelamento/estorno" },

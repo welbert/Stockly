@@ -2,6 +2,8 @@ pub mod auth;
 pub mod categories;
 pub mod clients;
 pub mod config;
+pub mod dashboard;
+pub mod dashboard_layout;
 pub mod items;
 pub mod logging;
 pub mod receipts;

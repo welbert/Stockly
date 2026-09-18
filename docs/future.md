@@ -9,6 +9,7 @@ Things noticed along the way that aren't part of the current implementation scop
 ## Estoque / Relatórios
 
 - **Stock-rupture forecast** — instead of just comparing current quantity to a fixed minimum, compute each item's average daily sales over a recent window (e.g. last 90 days of `sale`-type `stock_movements` rows) and project days remaining: `dias_restantes = quantidade_atual ÷ (soma das saídas no período ÷ dias do período)`. Could show as an extra status badge in Estoque ("Tendência: acaba em ~N dias") in addition to a dedicated "Sugestões" screen. The ledger needed for this (`stock_movements`) is already recorded from day one specifically so this doesn't need retroactive data once built.
+- **Price/margin-over-time report** — "no dia X este item custava Y" or a chart of margin (`sale_price - cost_price`) drifting over time. The ledger needed (`item_price_history`) is already recorded from the moment `update_item` first changes a price, same reasoning as `stock_movements` above — no consultation screen yet, this is purely the data source waiting for one.
 
 ## Crediário / Clientes
 

@@ -8,6 +8,9 @@ interface TooltipProps {
 
 const MARGIN = 6;
 const ESTIMATED_HEIGHT = 70;
+/** Matches the popup's `w-52` (13rem) — needed up front to clamp `left`
+ * before the popup itself has rendered/measured anything. */
+const TOOLTIP_WIDTH = 208;
 
 interface Position {
   top: number;
@@ -30,8 +33,16 @@ export function Tooltip({ text, children }: TooltipProps) {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const placement: Position["placement"] = rect.top > ESTIMATED_HEIGHT + MARGIN ? "above" : "below";
+    // `left` is the popup's horizontal *center* (it's positioned via
+    // `translateX(-50%)`) — clamped so a trigger near either screen edge
+    // (common for Dashboard cards spanning a wide grid) never pushes the
+    // fixed-width popup half off-screen.
+    const idealCenter = rect.left + rect.width / 2;
+    const minCenter = MARGIN + TOOLTIP_WIDTH / 2;
+    const maxCenter = window.innerWidth - MARGIN - TOOLTIP_WIDTH / 2;
+    const left = Math.min(Math.max(idealCenter, minCenter), maxCenter);
     setPos({
-      left: rect.left + rect.width / 2,
+      left,
       top: placement === "above" ? rect.top - MARGIN : rect.bottom + MARGIN,
       placement,
     });

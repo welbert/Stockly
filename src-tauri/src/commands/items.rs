@@ -80,6 +80,18 @@ fn record_movement(conn: &Connection, item_id: i64, movement_type: &str, delta: 
     Ok(())
 }
 
+/// Append-only, same idea as `record_movement` but for `cost_price`/`sale_price`
+/// — one row per value *after* the change, who changed it, and when. Also
+/// doubles as an audit trail (who touched pricing, not just stock).
+fn record_price_change(conn: &Connection, item_id: i64, cost_price: f64, sale_price: f64, user_id: i64) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO item_price_history (item_id, cost_price, sale_price, user_id) VALUES (?1, ?2, ?3, ?4)",
+        params![item_id, cost_price, sale_price, user_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn list_items(state: State<AppState>) -> Result<Vec<ItemSummary>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
@@ -136,6 +148,7 @@ pub fn create_item(
     if quantity > 0 {
         record_movement(&conn, id, "initial", quantity, admin_id)?;
     }
+    record_price_change(&conn, id, round2(cost_price), round2(sale_price), admin_id)?;
     fetch_item(&conn, id)
 }
 
@@ -168,13 +181,16 @@ pub fn update_item(
     if code_taken(&conn, &code, Some(id))? {
         return Err("Já existe um item com esse código".to_string());
     }
-    let previous_quantity: i64 = conn
-        .query_row("SELECT quantity FROM items WHERE id = ?1", params![id], |row| row.get(0))
+    let (previous_quantity, previous_cost_price, previous_sale_price): (i64, f64, f64) = conn
+        .query_row("SELECT quantity, cost_price, sale_price FROM items WHERE id = ?1", params![id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
         .map_err(|e| e.to_string())?;
+    let (new_cost_price, new_sale_price) = (round2(cost_price), round2(sale_price));
 
     conn.execute(
         "UPDATE items SET code = ?1, name = ?2, category_id = ?3, cost_price = ?4, sale_price = ?5, quantity = ?6, min_quantity = ?7, active = ?8 WHERE id = ?9",
-        params![code, name, category_id, round2(cost_price), round2(sale_price), quantity, min_quantity, active as i64, id],
+        params![code, name, category_id, new_cost_price, new_sale_price, quantity, min_quantity, active as i64, id],
     )
     .map_err(|e| e.to_string())?;
 
@@ -182,20 +198,30 @@ pub fn update_item(
     if delta != 0 {
         record_movement(&conn, id, "adjustment", delta, admin_id)?;
     }
+    if new_cost_price != previous_cost_price || new_sale_price != previous_sale_price {
+        record_price_change(&conn, id, new_cost_price, new_sale_price, admin_id)?;
+    }
     fetch_item(&conn, id)
 }
 
-/// Hard delete — Admin-only. Blocked by a foreign-key violation once the
-/// item has any stock_movements/sale_items history (sale, entry, adjustment,
-/// ...) — deliberately: it's only meant for correcting a fresh mistake, not
-/// retiring a real item (use `deactivate_item`/`update_item`'s `active` for that).
+/// Hard delete — Admin-only. Blocked **only** by the item having ever been
+/// sold (`sale_items`, checked explicitly below) — a stock entry, adjustment,
+/// or price change with no sale is still just "correcting a fresh mistake",
+/// not retiring a real item, so `stock_movements`/`item_price_history` rows
+/// are cascade-deleted along with the item instead of blocking it (use
+/// `deactivate_item`/`update_item`'s `active` to retire an item that *has*
+/// sales history).
 #[tauri::command]
 pub fn delete_item(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     require_admin(&state, &conn)?;
-    conn.execute("DELETE FROM items WHERE id = ?1", params![id]).map_err(|_| {
-        "Não é possível excluir: este item já tem movimentações registradas. Desative-o em vez de excluir.".to_string()
-    })?;
+    let sale_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM sale_items WHERE item_id = ?1", params![id], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+    if sale_count > 0 {
+        return Err("Não é possível excluir: este item já foi vendido. Desative-o em vez de excluir.".to_string());
+    }
+    conn.execute("DELETE FROM items WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
     Ok(())
 }
 

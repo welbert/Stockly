@@ -117,18 +117,19 @@ Stockly/
 │   ├── mockups-ui.html          # full/Admin mockup
 │   └── mockups-ui-usuario.html  # Usuário comum mockup (subset of screens)
 ├── src/
-│   ├── App.tsx                  # routes: AuthGate → AppShell → InventoryPage (index) / SalesPage / SettingsPage / UsersPage
+│   ├── App.tsx                  # routes: AuthGate → AppShell → InventoryPage (index) / DashboardPage / SalesPage / SettingsPage / UsersPage
 │   ├── main.tsx                 # applies theme + disables right-click before render
-│   ├── theme.ts                 # THEMES catalog + localStorage helpers — see "Theme rule"
+│   ├── theme.ts                 # THEMES catalog + localStorage helpers + themeColor() for Chart.js canvas colors — see "Theme rule"
 │   ├── logger.ts                # logging helper (forwards to write_log)
-│   ├── pages/                   # LoginPage, InventoryPage (Estoque), SalesPage (Venda/PDV), SettingsPage, UsersPage
+│   ├── pages/                   # LoginPage, InventoryPage (Estoque), DashboardPage, SalesPage (Venda/PDV), SettingsPage, UsersPage
 │   ├── components/
 │   │   ├── layout/               # AuthGate, AppShell
+│   │   ├── dashboard-cards/      # Admin-only Dashboard's grid + card catalog — see docs/frontend.md's Dashboard section
 │   │   ├── Button.tsx / Modal.tsx / ConfirmModal.tsx / Card.tsx   # generic primitives, token-only styling
 │   │   ├── MoneyInput.tsx        # R$ input, digit-enters-from-the-right — see "Money field rule"
 │   │   ├── ThemeSwitcher.tsx     # renders the THEMES catalog — never hardcodes which themes exist
 │   │   ├── Checkbox.tsx / InfoTooltip.tsx   # styled checkbox (not the raw browser box); "?" hover/focus hint next to a label
-│   │   ├── StockBadge.tsx        # critical/warning/ok chip — same rule the Dashboard screen will reuse later
+│   │   ├── StockBadge.tsx        # critical/warning/ok chip — Dashboard's low-stock cards reuse the same threshold rule, not this exact component (see docs/frontend.md)
 │   │   ├── LockScreen.tsx        # idle-lock overlay (re-enters own password, keeps screen state)
 │   │   ├── UserFormModal.tsx     # create/edit user, incl. the "elevate to Admin" confirm step
 │   │   ├── ItemFormModal.tsx     # Admin-only full item CRUD, incl. quantity (= ajuste de inventário)
@@ -141,7 +142,8 @@ Stockly/
 │   │   ├── AuthContext.tsx       # session (user, login, logout) — get_active_user on mount
 │   │   └── ThemeContext.tsx      # current theme; syncs with AuthContext's user on login
 │   ├── hooks/
-│   │   └── useIdleTimer.ts       # resets on mousemove/keydown/click; fires onIdle after N minutes; secondsRemaining ticks down only in the last 30s (warning banner)
+│   │   ├── useIdleTimer.ts       # resets on mousemove/keydown/click; fires onIdle after N minutes; secondsRemaining ticks down only in the last 30s (warning banner)
+│   │   └── useDashboardLayout.ts # Dashboard's edit mode: layout state, debounced/immediate autosave, undo-via-snapshot
 │   └── lib/
 │       ├── api.ts               # only place that calls invoke() — typed call<T>() wrapper + all command wrappers/types
 │       └── format.ts            # fmt() currency, fmtDate(), fmtDateTime(), normalize() (accent/case-insensitive search, shared by Estoque and Venda)
@@ -152,7 +154,8 @@ Stockly/
 │   │   ├── guard.rs              # require_admin/user_is_admin/active_user_id/resolve_admin_authorization — shared across commands/*
 │   │   ├── models.rs            # UserSummary/UserProfile/CategorySummary/ItemSummary/SaleItemInput/SaleItemDetail/SaleDetail (camelCase to the frontend) + shared row-mapping
 │   │   ├── money.rs              # round2() — the 2-decimal rounding rule, shared by items.rs and sales.rs
-│   │   └── commands/            # auth.rs, users.rs, categories.rs, items.rs, config.rs, sales.rs, receipts.rs, logging.rs
+│   │   ├── commands/            # auth.rs, users.rs, categories.rs, items.rs, config.rs, sales.rs, receipts.rs, dashboard_layout.rs, dashboard.rs, logging.rs
+│   │   └── bin/seed_demo.rs     # generates demo/stockly-demonstration.db — see demo/README.md
 │   ├── assets/fonts/            # Courier Prime TTFs (SIL OFL) embedded via include_bytes! in receipts.rs — never loaded from disk at runtime
 │   ├── Cargo.toml
 │   ├── tauri.conf.json          # identifier com.welbert.stockly, productName "Bora Vender"
@@ -164,6 +167,9 @@ Stockly/
 │   ├── commands.md               # every Tauri command, by domain, with signature
 │   ├── versioning.md             # SemVer bump rules, the 3 files kept in sync
 │   └── future.md                 # out-of-scope ideas/gaps — outlives Plans/PLANO.md
+├── demo/
+│   ├── stockly-demonstration.db # seeded demo data (2 users, password 123456) — see demo/README.md
+│   └── README.md                # what's in it, login, how to regenerate
 └── icon-source.png / icon.ico    # master icon assets (see Environment notes)
 ```
 

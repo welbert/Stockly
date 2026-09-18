@@ -9,17 +9,24 @@ const LOW_STOCK_PERCENT_KEY: &str = "low_stock_warning_percent";
 /// "Baixo" chip; change via `set_low_stock_percent`.
 const DEFAULT_LOW_STOCK_PERCENT: i64 = 20;
 
+/// `pub(crate)`, not just the `#[tauri::command]` below — also read by
+/// `commands::dashboard` to apply the exact same "warning" threshold to its
+/// low-stock cards, instead of a narrower critical-only definition.
+pub(crate) fn low_stock_percent(conn: &Connection) -> Result<i64, String> {
+    let value: Option<String> = conn
+        .query_row("SELECT value FROM config WHERE key = ?1", params![LOW_STOCK_PERCENT_KEY], |row| row.get(0))
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(value.and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_LOW_STOCK_PERCENT))
+}
+
 /// Both roles read this (it's used to compute the yellow "warning" chip in
 /// Estoque, above the red "critical" threshold), but only Admin can change it.
 #[tauri::command]
 pub fn get_low_stock_percent(state: State<AppState>) -> Result<i64, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     active_user_id(&state)?;
-    let value: Option<String> = conn
-        .query_row("SELECT value FROM config WHERE key = ?1", params![LOW_STOCK_PERCENT_KEY], |row| row.get(0))
-        .optional()
-        .map_err(|e| e.to_string())?;
-    Ok(value.and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_LOW_STOCK_PERCENT))
+    low_stock_percent(&conn)
 }
 
 #[tauri::command]

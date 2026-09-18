@@ -216,3 +216,109 @@ pub struct ClientDetail {
     pub credit_sales: Vec<CreditSaleSummary>,
     pub payments: Vec<CreditPaymentSummary>,
 }
+
+/// One card's position/size/visibility in a single Admin's Dashboard —
+/// `size` travels as a raw string (e.g. "2x1"), not validated against a
+/// fixed set on the backend: the vocabulary of sizes is a frontend catalog
+/// decision (`src/components/dashboard-cards/catalog.ts`), same reasoning as
+/// the schema's lack of a `CHECK` on `dashboard_layout.size`.
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardLayoutItem {
+    pub card_key: String,
+    pub x: i64,
+    pub y: i64,
+    pub size: String,
+    pub visible: bool,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LowStockItemSummary {
+    pub name: String,
+    pub quantity: i64,
+    pub min_quantity: i64,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TopSellingItemSummary {
+    pub name: String,
+    pub quantity: i64,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CategorySalesSummary {
+    pub category_name: Option<String>,
+    pub total: f64,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentMethodSalesSummary {
+    pub payment_method: String,
+    pub count: i64,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DailySalesSummary {
+    /// `YYYY-MM-DD`, local time.
+    pub date: String,
+    pub total: f64,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentSaleSummary {
+    pub receipt_number: String,
+    pub created_at: String,
+    pub user_name: String,
+    pub total: f64,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderDueSummary {
+    pub client_id: i64,
+    pub client_name: String,
+    pub reminder_date: String,
+    pub overdue: bool,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelledSalesSummary {
+    pub count: i64,
+    pub total_value: f64,
+}
+
+/// Everything every Dashboard card needs, fetched in one round-trip
+/// (`commands::dashboard::get_dashboard_data`) — cards never fetch their own
+/// data, they only read their own slice of this via props (same "dumb
+/// component" rule as the catalog itself). All money/count figures already
+/// exclude `status = 'cancelled'` sales unless the field name says otherwise.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardData {
+    pub items_in_stock: i64,
+    pub stock_value: f64,
+    pub sales_today: f64,
+    pub sales_month: f64,
+    pub received_today: f64,
+    pub received_month: f64,
+    pub low_stock_count: i64,
+    pub low_stock_items: Vec<LowStockItemSummary>,
+    pub top_selling_items: Vec<TopSellingItemSummary>,
+    pub sales_by_category: Vec<CategorySalesSummary>,
+    pub payment_methods: Vec<PaymentMethodSalesSummary>,
+    pub sales_last_7_days: Vec<DailySalesSummary>,
+    pub recent_sales: Vec<RecentSaleSummary>,
+    /// `null` when there's no completed sale in the previous month to compare against.
+    pub month_comparison_percent: Option<f64>,
+    pub reminders_due: Vec<ReminderDueSummary>,
+    pub credit_outstanding_total: f64,
+    pub discount_granted_month: f64,
+    pub cancelled_sales_month: CancelledSalesSummary,
+}

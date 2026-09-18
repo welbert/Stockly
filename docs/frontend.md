@@ -7,6 +7,7 @@ AuthGate                                    (src/components/layout/AuthGate.tsx)
 ├── no session  → renders <LoginPage/> directly (not a nested route)
 └── session ok  → <Outlet context={{ secondsUntilLock }}/> → AppShell
                       ├── index ("/")        → InventoryPage (Estoque)
+                      ├── "dashboard"        → DashboardPage (Admin-only; self-redirects to "/" otherwise)
                       ├── "venda"            → SalesPage (Venda/PDV)
                       ├── "devedores"        → DevedoresPage (Crediário)
                       ├── "historico"        → SalesHistoryPage (Histórico de vendas)
@@ -20,11 +21,44 @@ AuthGate                                    (src/components/layout/AuthGate.tsx)
 
 - **LoginPage** — branches on `hasAnyUsers()`: first-run shows an admin-creation form (`FirstRunForm`); otherwise a keyboard-navigable profile picker (`ProfilePicker`, arrow keys + Enter) followed by a password step.
 - **InventoryPage** (Estoque, index route) — search (accent-insensitive, `\p{Mn}` NFD strip via `normalize()` in `lib/format.ts`) + category filter, computed client-side over `list_items()`'s full result (no server-side filtering). Row actions differ by role: Admin gets "Editar"/"Excluir" (`ItemFormModal`), Usuário comum gets "Ajustar estoque" (`StockAdjustModal`) and only for active items — both also reachable via right-click (`ContextMenu`, see below). Paged client-side via the shared `Pagination` component (see below), page resets to 0 whenever the search term or category filter changes.
+- **DashboardPage** (Admin-only) — see its own section below.
 - **SalesPage** (Venda/PDV) — see its own section below.
 - **DevedoresPage** (Crediário, both roles — see `CLAUDE.md`'s note under "Planning source of truth" about screens the Usuário comum mockup doesn't duplicate) — see its own section below.
 - **SalesHistoryPage** (Histórico de vendas, both roles) — see its own section below.
 - **SettingsPage** — `Card` per concern: Aparência (`ThemeSwitcher`), Bloqueio automático (auto-lock dropdown, self-service for both roles), Diagnóstico (both roles too — "Abrir pasta de logs" via `open_log_dir`; `Plans/PLANO.md` lists it without the "exclusivo do Administrador" qualifier the other Configurações items get), and four Admin-only cards (Alerta de estoque baixo %, Precificação — default profit margin %, Crediário — on/off checkbox, blocked server-side while any client has an open balance, and Recibo — store name + free-text info lines for the receipt header, plus the footer's thank-you message; all saved on blur rather than per keystroke, the Crediário checkbox on change).
 - **UsersPage** — Admin-only table + `UserFormModal`; guards itself with `if (!user?.isAdmin) return <Navigate to="/" replace/>` since it's still reachable by URL even though the sidebar hides the link.
+
+## Dashboard (`src/pages/DashboardPage.tsx`, `src/components/dashboard-cards/`)
+
+Admin-only (`Plans/PLANO.md`'s "Dashboard"), same architecture as the sibling CashVault project's own customizable dashboard: a draggable/resizable card grid backed by a catalog, instead of a fixed layout.
+
+- **Data**: `DashboardPage` fetches `getDashboardData()` once on mount (one aggregate round-trip, `commands::dashboard::get_dashboard_data` — see `docs/commands.md`) and hands the whole `DashboardData` object down as `cardProps={{ data }}` to `DashboardGrid`. No card fetches its own data — each is a "dumb" component that only reads its own slice of `data` via props, which is what lets a card be added/removed from the catalog without touching any fetch logic.
+- **Grid** (`DashboardGrid.tsx`) — built on `react-grid-layout` v2's `GridLayout` component (`gridConfig`/`dragConfig`/`resizeConfig`/`constraints` props, `LayoutItem[]` layout), `GRID_COLS = 6` columns, `ROW_HEIGHT = 180`px rows. **Screen-size delimiter**: `useContainerWidth()` (from the same library) measures the actual available width via `ResizeObserver` and feeds it straight into `GridLayout`'s `width` prop — the grid, and therefore every card's pixel size, is always bounded to what actually fits the window, never wider. In edit mode a dashed outline wraps the grid at that exact measured width (not the full screen), so it's visually clear where the editable area ends even when there's empty space to the right on a wide monitor. `visibleItems` and each item's resize `constraints` are memoized/precomputed (`CARD_CONSTRAINTS`, built once at module scope from the static `CARD_CATALOG`) rather than rebuilt inline in the `layout` `useMemo` on every render — `react-grid-layout` deep-compares its `layout` prop with `fast-equals`, which treats functions by reference; a fresh `allowedSizeConstraint(...)` closure every render made every recompute look "different" even with identical x/y/w/h, which made the library treat it as an external layout change, fire `onLayoutChange`, update this component's own state, and recompute again — forever ("Maximum update depth exceeded", pegged the CPU while the Dashboard was open). The sibling CashVault project had the exact same bug (this architecture was ported from there) and got the same fix.
+- **Catalog** (`catalog.ts`) — `CARD_CATALOG: Record<CardKey, { label, description, allowedSizes, component }>`. `description` feeds both the "?" tooltip that `DashboardGrid` overlays on every card and the text shown in "+ Adicionar card" — no card renders its own explanation. `allowedSizes` reflects the real shape of each card's content (a stat is always compact `1x1`/`2x1`; a donut is narrow-and-tall, never full width; a table/list gets extra height options; the 7-day trend chart wants width) — resizing always **snaps** to the closest allowed size (`gridConstraints.ts`'s `allowedSizeConstraint`/`sizeFromDimensions`), never a free per-pixel resize. 18 cards total; see the table below.
+- **Default layout** (`db::DEFAULT_DASHBOARD_LAYOUT`, backend) — only 8 of the 18 catalog cards ship visible the first time an Admin opens the screen (six 1x1 stats filling the first row exactly, then the low-stock table and the sales trend chart sharing the row below), so a fresh dashboard isn't overwhelming. The other 10 exist in the catalog and stay opt-in via "+ Adicionar card". Each Admin has their **own** layout (`dashboard_layout.user_id`, see `docs/database.md`) — one Admin customizing their dashboard never touches another's.
+- **Edit mode** (`useDashboardLayout.ts`) — "✎ Personalizar" toggles `dragConfig.enabled`/`resizeConfig.enabled` and reveals "+ Adicionar card" (opens `AddCardDrawer`, listing catalog entries not currently visible — stays open after each pick, same "add several in a row" reasoning as Venda's `StockBrowserModal`) and a per-card "✕" (sets that card `visible: false`, still re-addable later — never actually deleted from the row until replaced by a fresh default). Re-adding a previously-removed card is repositioned to the current bottom of the layout (`x: 0, y: maxY`, recomputed fresh), not restored to whatever `x`/`y` it had before removal — otherwise it could reappear on top of a card the user rearranged into that spot in the meantime; its old `size` is kept, just not the stale position. Drag/resize autosaves debounced (500ms, `persistDebounced` — `onLayoutChange` fires many times a second mid-gesture, saving on every one would hammer the DB for nothing); add/remove-card saves immediately (`persistImmediate` — debouncing a discrete click would risk losing it if the app closes in that window). Every outgoing save is chained after the previous one settles (`saveChain`, a running promise) rather than fired independently — two saves triggered close together (e.g. adding two cards back to back) are two separate Tauri IPC round-trips with no inherent ordering guarantee, so without this the older (smaller) list could land in the DB *after* the newer one and silently overwrite it; the lost card would only resurface as "addable again" on the next reload. **Undo** ("✕ Cancelar"): a snapshot of the layout is taken the moment edit mode is entered (`snapshotRef`); "✓ Concluir" just flushes any pending debounced save, but "✕ Cancelar" restores and re-saves that snapshot, discarding everything autosaved during the whole editing session — not just the last drag. **Help** ("Clique aqui para ajuda", only shown in edit mode) opens `DashboardHelpModal` — three small looping CSS animations (hand-built, not a real recording, same idea as `KeyboardShortcutsModal`'s keyboard diagram) illustrating add/move/resize for whoever doesn't find the buttons/corner handle self-explanatory on the first visit.
+- **Cards** (one file each, `src/components/dashboard-cards/`) — most render through the shared `StatCard` (label + big value, ~10 near-identical cards); the rest are their own thing:
+
+  | Card key | Shows |
+  |---|---|
+  | `itens_em_estoque` | Total quantity in stock (active items) |
+  | `valor_em_estoque` | Stock value at **cost** (`cost_price × quantity`), not sale price — see `Plans/PLANO.md` |
+  | `vendas_hoje` / `vendas_mes` | Total sold today / this month (completed only) |
+  | `recebidos_hoje` / `recebidos_mes` | Cash/Card/PIX + Crediário settlements actually received — differs from "Vendas" because a Crediário sale counts as a sale before the money comes in |
+  | `estoque_baixo` | Count of items at/under their minimum quantity |
+  | `itens_estoque_baixo` | Table of those items, most critical first |
+  | `vendas_por_periodo` | Bar chart, last 7 days (Chart.js) |
+  | `vendas_por_categoria` | Donut, this month's sales by category (Chart.js) |
+  | `top_itens_vendidos` | Table, top-selling items this month by quantity |
+  | `formas_pagamento` | Donut, this month's sale count by payment method (Chart.js) |
+  | `ultimas_vendas` | List of the most recent completed sales |
+  | `comparativo_mensal` | % change vs. the previous month (`null` shown as "—" when there's nothing to compare against) |
+  | `devedores_lembrete` | Clients with an open balance and a reminder due/overdue (same window as Devedores' `ReminderBadge`) |
+  | `credito_em_aberto` | Sum of every client's open Crediário balance — same figure as Devedores' own "Total em aberto" |
+  | `descontos_concedidos` | Sum of item + general discounts granted this month |
+  | `vendas_canceladas` | Count and total value of sales cancelled/estornadas this month |
+
+- **Charts** use Chart.js + `react-chartjs-2` (first real usage in this app — `CLAUDE.md`'s stack table listed it from day one). Canvas can't take a `var(--color-primary)` string directly, so chart colors go through `themeColor()` (`src/theme.ts`), which reads the already-resolved CSS custom property via `getComputedStyle` — same trick the sibling CashVault project uses for its own charts.
 
 ## Venda / PDV (`src/pages/SalesPage.tsx`)
 
@@ -103,3 +137,4 @@ Both roles see this screen identically — locating a sale to cancel/estornar is
 ## Hooks (`src/hooks/`)
 
 - **useIdleTimer** — resets on `mousemove`/`keydown`/`click`; calls `onIdle` after N minutes. `secondsRemaining` stays `null` until the last 30 seconds before the lock (`AuthGate` uses this to show a warning, not a permanently-ticking countdown — a countdown that resets on every mouse move would just be noise while someone is actively working).
+- **useDashboardLayout** — see the Dashboard section above (edit mode, debounced/immediate autosave, undo-via-snapshot).

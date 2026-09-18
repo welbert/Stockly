@@ -1,5 +1,8 @@
 mod commands;
-mod db;
+/// `pub` only so `src/bin/seed_demo.rs` (the demo-database generator, see
+/// `demo/README.md`) can reuse `init_db`/`migrate_db` instead of duplicating
+/// the schema — nothing else outside this crate depends on it.
+pub mod db;
 mod guard;
 mod models;
 mod money;
@@ -86,6 +89,9 @@ pub fn run() {
             commands::clients::cancel_credit_payment,
             commands::config::get_credit_enabled,
             commands::config::set_credit_enabled,
+            commands::dashboard_layout::get_dashboard_layout,
+            commands::dashboard_layout::save_dashboard_layout,
+            commands::dashboard::get_dashboard_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

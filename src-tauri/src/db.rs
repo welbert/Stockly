@@ -95,9 +95,13 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
 
+        -- `item_id` cascades on delete — `delete_item` only ever blocks on
+        -- `sale_items` (checked explicitly there), so a stock/price ledger
+        -- with no sale attached is never a reason by itself to keep an item
+        -- around; it's removed along with it.
         CREATE TABLE IF NOT EXISTS stock_movements (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_id         INTEGER NOT NULL REFERENCES items(id),
+            item_id         INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
             movement_type   TEXT    NOT NULL CHECK (movement_type IN ('sale', 'entry', 'adjustment', 'initial', 'csv_import', 'refund')),
             quantity_delta  INTEGER NOT NULL,
             sale_id         INTEGER NULL REFERENCES sales(id),
@@ -105,6 +109,21 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_stock_movements_item ON stock_movements(item_id);
+
+        -- Append-only, same shape as stock_movements but for cost_price/sale_price
+        -- instead of quantity: one row per value *after* the change (not a
+        -- before/after pair — the previous value is just the row before it).
+        -- Written once at create_item (the starting prices) and again on
+        -- every update_item that actually changes one of the two prices.
+        CREATE TABLE IF NOT EXISTS item_price_history (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id     INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            cost_price  REAL    NOT NULL CHECK (cost_price >= 0),
+            sale_price  REAL    NOT NULL CHECK (sale_price >= 0),
+            user_id     INTEGER NOT NULL REFERENCES users(id),
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_item_price_history_item ON item_price_history(item_id);
 
         CREATE TABLE IF NOT EXISTS credit_payments (
             id                           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,8 +150,56 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         CREATE TABLE IF NOT EXISTS config (
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
-        );",
+        );
+
+        -- `size` has no CHECK on purpose: the vocabulary of sizes ('1x1'..'6x3')
+        -- is a catalog decision (src/components/dashboard-cards/catalog.ts), not
+        -- a schema one — locking it in the DB would mean a migration every time
+        -- a card's allowed sizes change.
+        CREATE TABLE IF NOT EXISTS dashboard_layout (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            card_key TEXT    NOT NULL,
+            x        INTEGER NOT NULL,
+            y        INTEGER NOT NULL,
+            size     TEXT    NOT NULL,
+            visible  INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(user_id, card_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_dashboard_layout_user ON dashboard_layout(user_id);",
     )
+}
+
+/// (card_key, x, y, size) of the Dashboard's default layout, seeded the first
+/// time an Admin ever opens the screen (see `commands::dashboard::get_dashboard_layout`).
+/// Only a curated subset of `CARD_CATALOG` ships visible by default — the rest
+/// exist in the catalog but stay opt-in via "+ Adicionar card", so a fresh
+/// dashboard isn't overwhelming. Chosen to fit a clean 6-column grid: six 1x1
+/// stat cards fill the first row exactly, then the two cards that benefit from
+/// more height/width (the low-stock table, the sales trend chart) share the row below.
+pub const DEFAULT_DASHBOARD_LAYOUT: &[(&str, i64, i64, &str)] = &[
+    ("itens_em_estoque", 0, 0, "1x1"),
+    ("vendas_hoje", 1, 0, "1x1"),
+    ("recebidos_hoje", 2, 0, "1x1"),
+    ("vendas_mes", 3, 0, "1x1"),
+    ("recebidos_mes", 4, 0, "1x1"),
+    ("estoque_baixo", 5, 0, "1x1"),
+    ("itens_estoque_baixo", 0, 1, "2x2"),
+    ("vendas_por_periodo", 2, 1, "4x2"),
+];
+
+/// Seeds an Admin's dashboard with `DEFAULT_DASHBOARD_LAYOUT` — `INSERT OR
+/// IGNORE` so it's safe to call even if some rows already exist (e.g. the
+/// lazy "seed on first empty load" path in `get_dashboard_layout`).
+pub fn seed_default_dashboard_layout(conn: &Connection, user_id: i64) -> Result<(), String> {
+    for (card_key, x, y, size) in DEFAULT_DASHBOARD_LAYOUT {
+        conn.execute(
+            "INSERT OR IGNORE INTO dashboard_layout (user_id, card_key, x, y, size) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![user_id, card_key, x, y, size],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 fn migrate_db(conn: &Connection) {
@@ -145,6 +212,30 @@ fn migrate_db(conn: &Connection) {
     // credit_payments.sale_id (added above, once) is superseded by credit_payment_allocations
     // — dropped instead of kept around unused, since this app has no installs to preserve yet.
     let _ = conn.execute("ALTER TABLE credit_payments DROP COLUMN sale_id", []);
+    let _ = conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS dashboard_layout (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            card_key TEXT    NOT NULL,
+            x        INTEGER NOT NULL,
+            y        INTEGER NOT NULL,
+            size     TEXT    NOT NULL,
+            visible  INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(user_id, card_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_dashboard_layout_user ON dashboard_layout(user_id);",
+    );
+    let _ = conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS item_price_history (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id     INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            cost_price  REAL    NOT NULL CHECK (cost_price >= 0),
+            sale_price  REAL    NOT NULL CHECK (sale_price >= 0),
+            user_id     INTEGER NOT NULL REFERENCES users(id),
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_item_price_history_item ON item_price_history(item_id);",
+    );
 }
 
 /// In-memory connection with the schema applied — reused by other modules'

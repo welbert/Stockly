@@ -55,20 +55,31 @@ An item with `category_id IS NULL` is displayed as "Categoria indefinida" (front
 | `active` | INTEGER NOT NULL DEFAULT 1 | boolean — any logged-in profile can set this to `0` (`commands::items::deactivate_item`); only Admin can set it back to `1` (`update_item`). Also the eventual target of the CSV import screen's "desativar" action for items missing from the sheet (not built yet) |
 | `created_at` | TEXT | |
 
-`delete_item` (Admin-only, hard delete) is blocked by the `stock_movements.item_id` foreign key once the item has any recorded movement — in practice that means it only works for a freshly-created, never-touched item (a mistake being corrected). Retiring a real item goes through `active` instead (see `sale_items` below for how a hard-deleted item's past receipts still stay accurate).
+`delete_item` (Admin-only, hard delete) is blocked **only** by the item having ever been sold — an explicit `sale_items` check in the command itself, not a foreign-key violation. `stock_movements`/`item_price_history` rows are `ON DELETE CASCADE` and simply disappear with the item: a stock entry, inventory adjustment, or price change with no sale behind it is still just "correcting a fresh mistake," not retiring a real item. Retiring an item that *has* sold goes through `active` instead (see `sale_items` below for how a hard-deleted item's past receipts still stay accurate even though the item itself is gone).
 
 ### `stock_movements` — append-only ledger
 | Column | Type | Notes |
 |---|---|---|
 | `id` | INTEGER PK | |
-| `item_id` | INTEGER NOT NULL → `items(id)` | |
+| `item_id` | INTEGER NOT NULL → `items(id)` **CASCADE** | |
 | `movement_type` | TEXT CHECK IN (`sale`, `entry`, `adjustment`, `initial`, `csv_import`, `refund`) | |
 | `quantity_delta` | INTEGER | negative on `sale`, positive on `entry`/`refund`/`initial` |
 | `sale_id` | INTEGER NULL → `sales(id)` | only set when `movement_type = 'sale'` (or `'refund'` reversing one) |
 | `user_id` | INTEGER NOT NULL → `users(id)` | who caused the movement |
 | `created_at` | TEXT | |
 
-Never edited or deleted. Written by `commands::items` (`initial` on `create_item` when the starting quantity is `> 0`, `entry` on `add_stock_entry`, `adjustment` on `update_item` when its `quantity` field's value differs from what was stored) and by `commands::sales::create_sale` (`sale`, one row per line item, `sale_id` set — inserted only after the `sales` row exists in the same transaction, so the reference is always valid; `refund` is reserved for the not-yet-built cancel/estorno flow). `items.quantity` is always updated in the same statement/transaction as the matching ledger row — the ledger is the "why", the item's column is the fast "how much now". No consultation screen yet — it's still just the data source for a possible future stock-rupture forecast (see `docs/future.md`).
+Never edited or deleted. Written by `commands::items` (`initial` on `create_item` when the starting quantity is `> 0`, `entry` on `add_stock_entry`, `adjustment` on `update_item` when its `quantity` field's value differs from what was stored) and by `commands::sales` (`sale` on `create_sale`, one row per line item, `sale_id` set — inserted only after the `sales` row exists in the same transaction, so the reference is always valid; `refund` on `cancel_sale`, one row per line whose item still exists, reversing the original `sale` decrement). `items.quantity` is always updated in the same statement/transaction as the matching ledger row — the ledger is the "why", the item's column is the fast "how much now". No consultation screen yet — it's still just the data source for a possible future stock-rupture forecast (see `docs/future.md`).
+
+### `item_price_history` — append-only ledger for `cost_price`/`sale_price`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `item_id` | INTEGER NOT NULL → `items(id)` **CASCADE** | |
+| `cost_price` / `sale_price` | REAL, `CHECK (>= 0)` | the item's **new** values after the change — not a before/after pair, the previous value is just the row before this one |
+| `user_id` | INTEGER NOT NULL → `users(id)` | who changed it — this table doubles as a pricing audit trail, not just a history |
+| `created_at` | TEXT | |
+
+Same shape and purpose as `stock_movements`, just for the two price columns instead of quantity — including `item_id ON DELETE CASCADE` (see `delete_item` above: only a sale blocks deletion, so this ledger never needs to). Written by `commands::items::create_item` **unconditionally** (the item's starting `cost_price`/`sale_price`, so the very first value is always in the ledger, not just the ones after it) and again by `update_item` whenever at least one of the two actually differs from what was stored (mirrors `stock_movements`' `adjustment` row only firing when `quantity` differs) — editing an item without touching either price writes nothing here. Unlike `stock_movements`' `initial` (which is skipped when the starting quantity is `0`, since there's no movement to explain), the price row is never skipped: every item always has *some* price from the moment it exists, so there's no equivalent "nothing happened yet" case. No consultation screen yet, same as `stock_movements` — just the data source for a possible future price/margin report.
 
 ### `clients` — Crediário debtors
 | Column | Type | Notes |
@@ -152,6 +163,18 @@ A client's open balance only sums `amount` where `cancelled_at IS NULL` (see `co
 | `amount` | REAL, `CHECK (> 0)` | how much of `payment_id`'s total went to this specific sale |
 
 A `credit_payments` row can have 1+ allocation rows — `commands::clients::register_credit_payment` lets an operator select several open sales at once and pay them in a single event: every selected sale except one (the caller-chosen "residual") is allocated its full remaining balance, and the residual one absorbs whatever's left over. A sale's own remaining balance is `sale.total - SUM(allocations.amount WHERE sale_id = ? AND <payment not cancelled>)` (`commands::clients::sale_paid_amount`) — this is also how "Valor pago agora" is represented now: `create_sale` inserts a normal `credit_payments` row plus one allocation pointing at the sale it was just created for, instead of the single `sale_id` column `credit_payments` used to carry for that one case (removed — this app has no installs to preserve compatibility for yet).
+
+### `dashboard_layout` — per-Admin Dashboard card positions
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `user_id` | INTEGER NOT NULL → `users(id)` **CASCADE** | |
+| `card_key` | TEXT NOT NULL | matches a key in `CARD_CATALOG` (`src/components/dashboard-cards/catalog.ts`) — not a foreign key, just a string the frontend catalog defines |
+| `x` / `y` | INTEGER | position in grid units (`GRID_COLS = 6` wide) |
+| `size` | TEXT | e.g. `"2x1"` — **no `CHECK`** on purpose: the vocabulary of sizes is a frontend catalog decision, not a schema one, and locking it in the DB would mean a migration every time a card's allowed sizes change |
+| `visible` | INTEGER NOT NULL DEFAULT 1 | boolean — a card can exist in the table but be hidden (removed via "✕" in edit mode, still addable back from "+ Adicionar card") |
+
+`UNIQUE(user_id, card_key)` — one row per card per Admin. `commands::dashboard_layout::get_dashboard_layout` seeds `db::DEFAULT_DASHBOARD_LAYOUT` (a curated subset of the catalog, not every card) the first time a given Admin's rows are empty, rather than seeding at `create_user` time — Dashboard is Admin-only, so seeding for every profile at creation would leave dead rows for every Usuário comum, who never opens this screen. `save_dashboard_layout` replaces the whole set for that Admin in one transaction (delete + re-insert) on every drag/resize (debounced client-side) and add/remove-card click (immediate).
 
 ### `config` — generic key/value
 ```

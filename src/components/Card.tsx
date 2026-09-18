@@ -18,7 +18,13 @@ export function Card({ title, hint, children, className = "" }: CardProps) {
           {hint && <span className="text-xs text-theme-3">{hint}</span>}
         </div>
       )}
-      <div className="p-5">{children}</div>
+      {/* `flex-1 min-h-0` only take effect when the outer div is itself a flex
+          column (e.g. Dashboard cards passing `className="flex h-full flex-col"`)
+          — harmless no-ops otherwise, since `flex`/`min-height` only apply to
+          flex items. Needed so a scrollable inner wrapper (`overflow-y-auto`)
+          a card renders actually gets a bounded height to scroll within,
+          instead of growing past the grid cell. */}
+      <div className="min-h-0 flex-1 p-5">{children}</div>
     </div>
   );
 }

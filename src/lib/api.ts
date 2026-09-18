@@ -472,3 +472,71 @@ export function getCreditEnabled() {
 export function setCreditEnabled(enabled: boolean) {
   return call<void>("set_credit_enabled", { enabled });
 }
+
+/** Width (1st number, in columns of `GRID_COLS`) × height (2nd number, in
+ * rows of `ROW_HEIGHT`) — see `SIZE_DIMENSIONS` in `dashboard-cards/catalog.ts`. */
+export type CardSize =
+  | "1x1" | "1x2" | "1x3"
+  | "2x1" | "2x2" | "2x3"
+  | "3x1" | "3x2" | "3x3"
+  | "4x1" | "4x2" | "4x3"
+  | "5x1" | "5x2" | "5x3"
+  | "6x1" | "6x2" | "6x3";
+
+export type DashboardLayoutItem = {
+  cardKey: string;
+  x: number;
+  y: number;
+  size: CardSize;
+  visible: boolean;
+};
+
+export type LowStockItemSummary = { name: string; quantity: number; minQuantity: number };
+export type TopSellingItemSummary = { name: string; quantity: number };
+export type CategorySalesSummary = { categoryName: string | null; total: number };
+export type PaymentMethodSalesSummary = { paymentMethod: PaymentMethod; count: number };
+export type DailySalesSummary = { date: string; total: number };
+export type RecentSaleSummary = { receiptNumber: string; createdAt: string; userName: string; total: number };
+export type ReminderDueSummary = { clientId: number; clientName: string; reminderDate: string; overdue: boolean };
+export type CancelledSalesSummary = { count: number; totalValue: number };
+
+/** Everything every Dashboard card needs, fetched once by `DashboardPage` and
+ * passed down as props — no card fetches its own data (see `docs/frontend.md`). */
+export type DashboardData = {
+  itemsInStock: number;
+  stockValue: number;
+  salesToday: number;
+  salesMonth: number;
+  receivedToday: number;
+  receivedMonth: number;
+  lowStockCount: number;
+  lowStockItems: LowStockItemSummary[];
+  topSellingItems: TopSellingItemSummary[];
+  salesByCategory: CategorySalesSummary[];
+  paymentMethods: PaymentMethodSalesSummary[];
+  salesLast7Days: DailySalesSummary[];
+  recentSales: RecentSaleSummary[];
+  /** `null` when there's no completed sale in the previous month to compare against. */
+  monthComparisonPercent: number | null;
+  remindersDue: ReminderDueSummary[];
+  creditOutstandingTotal: number;
+  discountGrantedMonth: number;
+  cancelledSalesMonth: CancelledSalesSummary;
+};
+
+/** Admin's own layout — always resolved server-side from the active session,
+ * never a `userId` argument (see `CLAUDE.md`'s Auth rule). Seeded with a
+ * curated default set the first time it's ever requested. */
+export function getDashboardLayout() {
+  return call<DashboardLayoutItem[]>("get_dashboard_layout");
+}
+
+/** Replaces the whole layout — called on every drag/resize (debounced
+ * client-side) and on every add/remove-card click (immediate). */
+export function saveDashboardLayout(items: DashboardLayoutItem[]) {
+  return call<void>("save_dashboard_layout", { items });
+}
+
+export function getDashboardData() {
+  return call<DashboardData>("get_dashboard_data");
+}

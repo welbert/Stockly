@@ -39,3 +39,12 @@ export function storeTheme(theme: ThemeId) {
 export function applyTheme(theme: ThemeId) {
   document.documentElement.setAttribute("data-theme", theme);
 }
+
+/** Reads an already-resolved CSS custom property (e.g. `--color-primary`,
+ * which varies by theme in `index.css`) — used by Chart.js canvas charts,
+ * which can't take a `var(...)` string directly as a color. */
+export function themeColor(varName: string, fallback: string): string {
+  if (typeof document === "undefined") return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  return value || fallback;
+}

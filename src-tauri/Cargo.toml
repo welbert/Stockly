@@ -4,6 +4,10 @@ version = "0.0.1"
 description = "Bora Vender"
 authors = ["welbert"]
 edition = "2021"
+# Needed once a 2nd binary (src/bin/seed_demo.rs) exists — otherwise `cargo
+# run` (which `tauri dev`/`tauri build` invoke with no `--bin`) can't guess
+# which one to run and errors out.
+default-run = "stockly-app"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
