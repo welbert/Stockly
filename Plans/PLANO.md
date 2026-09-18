@@ -344,12 +344,38 @@ Cards candidatos para o catálogo inicial do Stockly (mockup `mockups-ui.html` +
 
 **Exclusivo do Administrador** (não aparece no menu do Usuário comum — ver "Perfis e autenticação").
 
-- **Menu lateral expansível** (decidido): "Relatórios" no menu não navega direto — expande, mostrando os relatórios disponíveis como subitens, cada um sua própria sub-rota/tela com filtro próprio (período, categoria etc.), em vez de tudo empilhado numa página só. Facilita adicionar relatório novo no futuro sem redesenhar a tela inteira (ex.: candidato natural — relatório de Crediário/devedores).
-- Relatórios da v1 (cada um um subitem):
-  - Vendas por período (dia/semana/mês/intervalo customizado).
-  - Vendas por categoria / por item.
-  - Margem/lucro (preço de venda - preço de custo).
+- **Menu lateral expansível** (decidido): "Relatórios" no menu não navega direto — expande, mostrando os relatórios disponíveis como subitens, cada um sua própria sub-rota/tela com filtro próprio (período, categoria etc.), em vez de tudo empilhado numa página só. Facilita adicionar relatório novo no futuro sem redesenhar a tela inteira.
 - Exportação dos relatórios (CSV e/ou PDF, reaproveitando a geração de PDF do recibo).
+
+### Candidatos a relatório (revisão pós-Dashboard, Crediário, Histórico de vendas e `item_price_history` — cada um já mapeado pra fonte de dado real que existe hoje, não hipotética)
+
+**Vendas**
+- Vendas por período (dia/semana/mês/intervalo customizado) — já previsto na v1.
+- Vendas por categoria / por item — já previsto na v1.
+- Vendas por forma de pagamento — mesmo agregado do Dashboard (`formas_pagamento`), só que filtrável por período arbitrário e exportável, em vez de fixo no mês atual.
+- **Vendas por operador** — quem vendeu o quê, quanto, quantas vendas no período (`sales.user_id`) — útil pra acompanhar desempenho/rotina de cada operador, não só o dono.
+- Comparativo de períodos — mês atual vs. anterior (já no Dashboard como `comparativo_mensal`), mas aqui generalizado pra qualquer par de períodos escolhido, não só o mês corrente.
+- **Ticket médio** por período — não estava em nenhuma versão anterior deste plano; métrica clássica de PDV (total vendido ÷ número de vendas no período), diferente de "Vendas por período" que só soma.
+- **Descontos concedidos** — quanto foi concedido, por quem foi autorizado, em quais vendas, no período — já dá pra calcular hoje (mesma fórmula do `discountValue` de `list_sales`/Dashboard), só faltava um relatório dedicado com filtro de período/operador.
+- **Vendas canceladas/estornadas** — quantidade, valor total estornado, quem cancelou, quem autorizou, no período — visibilidade que hoje só existe espalhada no Histórico de vendas, útil pra Admin acompanhar se cancelamentos estão dentro do esperado.
+- Margem/lucro (preço de venda − preço de custo) — já previsto na v1, mas com uma decisão em aberto agora que `item_price_history` existe: usar o **custo no momento da venda** (a linha de `item_price_history` mais recente com `created_at <= sales.created_at`) em vez do `items.cost_price` **atual** — senão, um item cujo custo mudou depois de vendido mostraria uma margem histórica errada. `sale_items.unit_price` já é o preço de venda no momento (snapshot); custo precisa do mesmo tratamento pra a conta fechar de verdade.
+
+**Estoque**
+- **Movimentação de estoque** — consulta direta do ledger `stock_movements` (filtrável por item/período/tipo: venda, entrada, ajuste, estorno, etc.) — é a "tela de consulta" que `docs/database.md` já registra como pendente desde que a tabela foi criada; os dados já existem desde o dia 1, só falta a tela.
+- **Histórico de alteração de preço** — consulta direta do `item_price_history` (por item: linha do tempo de custo/venda, quem mudou, quando) — mesma lógica do relatório de movimentação de estoque, aplicada à tabela irmã que criamos mais recentemente.
+- Estoque valorizado por categoria — mesmo cálculo do Dashboard (`valor_em_estoque`, a custo), quebrado por categoria em vez de um total único.
+- **Itens sem movimento** ("parados") — itens sem nenhuma linha `sale` em `stock_movements` nos últimos N dias — sinaliza capital parado, candidato a promoção/desconto ou descontinuação.
+- Previsão de ruptura de estoque — já registrado em `docs/future.md` ("Stock-rupture forecast"); citado aqui só pra lembrar que também é candidato a relatório, não só a badge extra no Estoque.
+
+**Crediário / Devedores**
+- **Inadimplência com "aging"** — saldo em aberto agrupado por faixa de atraso (ex.: 0–7 dias, 8–30, 30+, calculado a partir de `reminder_date` ou de quando a venda foi feita) — mais estruturado que o "Total em aberto" único que já existe em Devedores/Dashboard.
+- Pagamentos recebidos (Crediário) por período — consulta de `credit_payments`, quanto entrou, por quem foi registrado.
+- Pagamentos cancelados — auditoria de `credit_payments` com `cancelled_at` preenchido: quem cancelou, quem autorizou, motivo (`cancel_reason`, campo que já existe e é obrigatório no cancelamento).
+
+**Auditoria**
+- **Autorizações de Administrador** — visão unificada de toda ação que precisou de senha de Admin (desconto concedido, venda cancelada, pagamento de Crediário cancelado, cliente renomeado com saldo em aberto) — todas essas já gravam `*_authorized_by_user_id` em suas respectivas tabelas hoje; um relatório assim só precisa juntar o que já existe em 4 tabelas diferentes, não pede coluna nova. Complementa (sem substituir) a ideia de um log de auditoria genérico já registrada em "Ideias extras".
+
+Nenhum item acima está priorizado/comprometido para a v1 além do que já estava (Vendas por período/categoria/item, Margem) — é só o levantamento de candidatos pedido, pra decidir prioridade quando a implementação de Relatórios realmente começar.
 
 ## Configurações
 

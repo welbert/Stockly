@@ -1,22 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import { useAuth } from "../context/AuthContext";
 import type { SaleListItem, UserSummary } from "../lib/api";
-import { listAdmins, listSales, openReceiptFile, printFile, regenerateReceiptPdf } from "../lib/api";
+import { exportSalesCsv, listAdmins, listSales, openReceiptFile, printFile, regenerateReceiptPdf, toSaleCsvRows } from "../lib/api";
+import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { ContextMenu, ContextMenuItem } from "../components/ContextMenu";
 import { Pagination } from "../components/Pagination";
 import { SaleDetailModal } from "../components/SaleDetailModal";
-import { PAYMENT_METHOD_LABEL, fmt, fmtDateTime, normalize } from "../lib/format";
+import { PAYMENT_METHOD_LABEL, fmt, fmtDateTime, localDateKey, normalize } from "../lib/format";
 import { logger } from "../logger";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
-
-/** Local (not UTC) `YYYY-MM-DD` for comparing against the `<input type="date">`
- * range fields — `createdAt` is stored in UTC, same conversion `fmtDateTime` does. */
-function saleLocalDate(createdAt: string): string {
-  const d = new Date(createdAt.replace(" ", "T") + "Z");
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 export function SalesHistoryPage() {
   const { user } = useAuth();
@@ -75,8 +70,8 @@ export function SalesHistoryPage() {
   const filtered = useMemo(() => {
     const term = normalize(search.trim());
     return sales.filter((s) => {
-      if (dateFrom && saleLocalDate(s.createdAt) < dateFrom) return false;
-      if (dateTo && saleLocalDate(s.createdAt) > dateTo) return false;
+      if (dateFrom && localDateKey(s.createdAt) < dateFrom) return false;
+      if (dateTo && localDateKey(s.createdAt) > dateTo) return false;
       if (statusFilter && s.status !== statusFilter) return false;
       if (paymentFilter && s.paymentMethod !== paymentFilter) return false;
       if (!term) return true;
@@ -94,6 +89,28 @@ export function SalesHistoryPage() {
     () => filtered.slice(page * pageSize, (page + 1) * pageSize),
     [filtered, page, pageSize],
   );
+
+  // Exports whatever's currently filtered (same rows `paginated` slices
+  // from), not just the visible page — same rationale as `toSaleCsvRows`'s
+  // doc comment, shared with `VendasPorPeriodoPage`'s own export button.
+  async function handleExportCsv() {
+    setActionError(null);
+    let path: string | null;
+    try {
+      path = await save({ defaultPath: "historico-de-vendas.csv", filters: [{ name: "CSV", extensions: ["csv"] }] });
+    } catch (err) {
+      logger.error("falha ao abrir seletor de destino do CSV", err);
+      setActionError("Não foi possível abrir o seletor de arquivo.");
+      return;
+    }
+    if (!path) return;
+    try {
+      await exportSalesCsv(path, toSaleCsvRows(filtered));
+    } catch (err) {
+      logger.error("falha ao exportar CSV do histórico de vendas", path, err);
+      setActionError(String(err));
+    }
+  }
 
   if (!user) return null;
 
@@ -145,6 +162,10 @@ export function SalesHistoryPage() {
             </option>
           ))}
         </select>
+        <div className="flex-1" />
+        <Button variant="secondary" onClick={handleExportCsv}>
+          ⭱ Exportar CSV
+        </Button>
       </div>
 
       {actionError && <p className="mb-3 text-xs text-danger">{actionError}</p>}

@@ -282,6 +282,37 @@ pub struct SaleListItem {
     pub discount_value: f64,
 }
 
+/// One row of a sales CSV export, as it travels over the Tauri IPC (JSON,
+/// camelCase) — already shaped for display by the frontend (`toSaleCsvRows`
+/// in `src/lib/api.ts`: formatted date, payment method label, "Concluída"/
+/// "Cancelada"), not raw codes. **Not** what actually gets written to the
+/// `.csv` file, which uses Portuguese headers instead — see
+/// `commands::sales::SaleCsvFileRow`, converted from this type right at the
+/// `csv_util` boundary. Same split, same reasoning, as `ItemCsvRow`/
+/// `commands::items::ItemCsvFileRow`.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SaleCsvRow {
+    pub receipt_number: String,
+    pub created_at: String,
+    pub client_name: String,
+    pub user_name: String,
+    pub payment_method: String,
+    pub discount: f64,
+    pub total: f64,
+    pub status: String,
+}
+
+/// One (label, value) pair from a report's on-screen stat cards — the JSON/
+/// IPC counterpart of `pdf_util::ReportPdfStat`, sent by whichever report
+/// page calls `export_sales_report_pdf` (or a future report's own PDF export).
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportPdfStatInput {
+    pub label: String,
+    pub value: String,
+}
+
 /// A client ("devedor") with their computed Crediário balance — used both by
 /// the Devedores listing (filtered client-side to `balance > 0`, mirroring
 /// how Estoque filters `list_items` client-side) and by the client picker

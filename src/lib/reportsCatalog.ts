@@ -1,0 +1,70 @@
+/** Single source of truth for the Relatórios menu, its routes and each
+ * report's title/subtitle — consumed by `AppShell` (nav tree), `App.tsx`
+ * (route registration) and `ReportPlaceholderPage` (header/body text), so
+ * adding a report is one entry here instead of three places kept in sync by
+ * hand. Scope decided with the product owner (`Plans/PLANO.md`'s "Candidatos
+ * a relatório"): only these 11 for now — the rest of that list (Comparativo
+ * de períodos, Ticket médio, Descontos concedidos, Vendas canceladas,
+ * Margem/lucro, Estoque valorizado, Previsão de ruptura) is deliberately
+ * left out of the menu until prioritized. Every report here is a blank
+ * placeholder screen (`ReportPlaceholderPage`) until Relatórios itself is
+ * implemented — this pass is about the navigation, not the data. */
+export interface ReportDef {
+  slug: string;
+  label: string;
+  subtitle: string;
+}
+
+export interface ReportGroupDef {
+  id: string;
+  label: string;
+  reports: ReportDef[];
+}
+
+export const REPORT_GROUPS: ReportGroupDef[] = [
+  {
+    id: "vendas",
+    label: "Vendas",
+    reports: [
+      { slug: "vendas-periodo", label: "Vendas por período", subtitle: "Total vendido e nº de vendas em um intervalo" },
+      { slug: "vendas-categoria-item", label: "Vendas por categoria / item", subtitle: "Distribuição das vendas, por categoria ou por item" },
+      { slug: "vendas-forma-pagamento", label: "Vendas por forma de pagamento", subtitle: "Dinheiro, Cartão, PIX e Crediário no período" },
+      { slug: "vendas-operador", label: "Vendas por operador", subtitle: "Quem vendeu o quê, quanto, no período" },
+    ],
+  },
+  {
+    id: "estoque",
+    label: "Estoque",
+    reports: [
+      { slug: "movimentacao-estoque", label: "Movimentação de estoque", subtitle: "Consulta do ledger stock_movements" },
+      { slug: "historico-preco", label: "Histórico de alteração de preço", subtitle: "Consulta do ledger item_price_history" },
+      { slug: "itens-parados", label: "Itens sem movimento", subtitle: "Itens sem venda há N dias — candidatos a promoção/descontinuação" },
+    ],
+  },
+  {
+    id: "crediario",
+    label: "Crediário/Devedores",
+    reports: [
+      { slug: "inadimplencia-aging", label: "Inadimplência", subtitle: "Saldo em aberto agrupado por faixa de atraso" },
+      { slug: "pagamentos-recebidos", label: "Pagamentos recebidos", subtitle: "Quitações de Crediário no período" },
+      { slug: "pagamentos-cancelados", label: "Pagamentos cancelados", subtitle: "Auditoria de pagamentos revertidos" },
+    ],
+  },
+  {
+    id: "auditoria",
+    label: "Auditoria",
+    reports: [
+      { slug: "autorizacoes-admin", label: "Autorizações de Administrador", subtitle: "Toda ação que precisou de senha de Admin, num só lugar" },
+    ],
+  },
+];
+
+const REPORTS_BY_SLUG = new Map(REPORT_GROUPS.flatMap((g) => g.reports).map((r) => [r.slug, r]));
+
+export function findReport(slug: string | undefined): ReportDef | undefined {
+  return slug ? REPORTS_BY_SLUG.get(slug) : undefined;
+}
+
+export function reportPath(slug: string): string {
+  return `/relatorios/${slug}`;
+}

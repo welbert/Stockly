@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stockly — Mockup de Relatórios</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface-alt: #f1f3f6;
+    --border: #e3e6eb;
+    --text: #1b2130;
+    --text-muted: #6b7280;
+    --text-faint: #9aa1ad;
+    --primary: #4f46e5;
+    --primary-hover: #4338ca;
+    --primary-soft: #eef0fd;
+    --success: #16a34a;
+    --success-soft: #e7f7ed;
+    --danger: #dc2626;
+    --danger-soft: #fdecec;
+    --warning: #d97706;
+    --warning-soft: #fef3e2;
+    --info: #0891b2;
+    --sidebar-bg: #191c2e;
+    --sidebar-text: #c7cbe0;
+    --sidebar-active: #2b2f4a;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(16,20,30,.04), 0 8px 24px rgba(16,20,30,.06);
+    font-size: 15px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- App shell (same tokens/shapes as mockups-ui.html) ---------- */
+  .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg); color: var(--sidebar-text);
+    padding: 18px 12px; display: flex; flex-direction: column; gap: 4px;
+    overflow-y: auto;
+  }
+  .sidebar .brand {
+    color: #fff; font-weight: 700; font-size: 16px; padding: 8px 10px 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .sidebar .brand .dot {
+    width: 10px; height: 10px; border-radius: 3px;
+    background: linear-gradient(135deg, #818cf8, #4f46e5); display: inline-block;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px;
+    font-size: 13.5px; cursor: pointer; color: var(--sidebar-text); user-select: none;
+    border: 1px solid transparent;
+  }
+  .nav-item:hover { background: #22253c; color: #fff; }
+  .nav-item.active { background: var(--sidebar-active); color: #fff; border-color: #3a3f63; }
+  .nav-item.inert { cursor: default; opacity: .55; }
+  .nav-item.inert:hover { background: transparent; color: var(--sidebar-text); }
+  .nav-item .ic { width: 18px; height: 18px; display:inline-flex; align-items:center; justify-content:center; font-size: 13px; opacity: .9; }
+  .nav-caret { margin-left: auto; font-size: 10px; transition: transform .15s ease; opacity: .8; }
+  .nav-caret.open { transform: rotate(90deg); }
+  .nav-label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #6d7290; padding: 10px 10px 2px; }
+  .nav-sub { display: none; margin: 2px 0 4px; }
+  .nav-sub.open { display: block; }
+  .nav-sub-label { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: #565a78; padding: 8px 10px 3px 32px; }
+  .nav-sub-item { padding: 7px 10px 7px 32px; font-size: 12.5px; }
+  .sidebar-foot { margin-top: auto; padding: 10px; font-size: 12px; color: #6d7290; border-top: 1px solid #2a2e46; }
+
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    height: 56px; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; padding: 0 22px; flex-shrink: 0;
+  }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .topbar .sub { font-size: 12.5px; color: var(--text-muted); margin-left: 10px; font-weight: 400; }
+  .content { padding: 22px 26px 60px; overflow: auto; flex: 1; }
+
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ---------- Generic components (same as mockups-ui.html) ---------- */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .card-pad { padding: 18px 20px; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .card-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .card-head .hint { font-size: 12px; color: var(--text-muted); }
+
+  .grid { display: grid; gap: 16px; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 1100px) {
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600;
+    padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); cursor: pointer;
+  }
+  .btn:hover { background: var(--surface-alt); }
+  .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  select.input {
+    padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; font-size: 13.5px;
+    background: var(--surface); color: var(--text); font-family: inherit;
+  }
+
+  table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.tbl th {
+    text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-muted); padding: 10px 14px; border-bottom: 1px solid var(--border); font-weight: 600;
+  }
+  table.tbl td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  table.tbl tr:last-child td { border-bottom: none; }
+  table.tbl tr:hover td { background: var(--surface-alt); }
+  table.tbl code { background: var(--surface-alt); padding: 2px 6px; border-radius: 5px; font-size: 12px; border: 1px solid var(--border); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600;
+    padding: 3px 9px; border-radius: 999px; background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border);
+  }
+  .badge-muted-cat { background: #f2f2f4; color: var(--text-faint); font-style: italic; }
+  .badge-success { background: var(--success-soft); color: var(--success); border-color: #cdebd8; }
+  .badge-warning { background: var(--warning-soft); color: var(--warning); border-color: #fbe3bb; }
+  .badge-danger { background: var(--danger-soft); color: var(--danger); border-color: #f7cfcf; }
+  .badge-info { background: #e4f6f8; color: var(--info); border-color: #c8ecf1; }
+  .badge-admin { background: #efe6fb; color: #7c3aed; border-color: #ddc9f7; }
+
+  .stat-card { padding: 16px 18px; }
+  .stat-card .lbl { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+  .stat-card .val { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  .stat-card .delta { font-size: 12px; margin-top: 6px; }
+  .stat-card .delta.up { color: var(--success); }
+  .stat-card .delta.down { color: var(--danger); }
+
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+
+  .note-banner {
+    background: var(--primary-soft); border: 1px solid #d7d8fb; color: #3d3a8a;
+    padding: 10px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 16px;
+  }
+  .note-banner.warn { background: var(--warning-soft); border-color: #fbe3bb; color: #7a4a06; }
+
+  /* Line/bar chart with axes (same as mockups-ui.html) */
+  .axis-chart { display: flex; gap: 10px; }
+  .axis-y {
+    display: flex; flex-direction: column; justify-content: space-between; font-size: 10.5px;
+    color: var(--text-faint); padding: 2px 0 20px; text-align: right; width: 58px; flex-shrink: 0;
+  }
+  .axis-body { flex: 1; min-width: 0; }
+  .axis-area {
+    height: 170px; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    background-image: repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 1px, transparent 1px, transparent 25%);
+    display: flex; align-items: flex-end; gap: 8px; padding: 0 6px;
+  }
+  .axis-area .abar { flex: 1; background: linear-gradient(180deg, #818cf8, #4f46e5); border-radius: 4px 4px 0 0; position: relative; }
+  .axis-area .abar .abar-val {
+    position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+    font-size: 9.5px; font-weight: 600; color: var(--text-muted); white-space: nowrap;
+  }
+  .axis-x { display: flex; gap: 8px; margin-top: 6px; padding: 0 6px; }
+  .axis-x span { flex: 1; text-align: center; font-size: 10px; color: var(--text-muted); }
+
+  /* Donut chart via conic-gradient (same as mockups-ui.html) */
+  .donut-row { display: flex; align-items: center; gap: 20px; }
+  .donut { width: 128px; height: 128px; border-radius: 50%; flex-shrink: 0; position: relative; }
+  .donut-center {
+    position: absolute; inset: 20px; background: var(--surface); border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  }
+  .donut-center .dc-val { font-size: 15px; font-weight: 700; }
+  .donut-center .dc-lbl { font-size: 9.5px; color: var(--text-muted); }
+  .legend-list { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .legend-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+  .legend-row .lg-lbl { flex: 1; }
+  .legend-row .lg-val { color: var(--text-muted); font-size: 11.5px; }
+
+  .variant-switch { display: inline-flex; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 999px; padding: 3px; gap: 2px; }
+  .variant-switch button { border: none; background: transparent; padding: 6px 14px; font-size: 12.5px; font-weight: 600; border-radius: 999px; cursor: pointer; color: var(--text-muted); }
+  .variant-switch button.active { background: var(--surface); color: var(--primary); box-shadow: var(--shadow); }
+  .variant-panel { display: none; }
+  .variant-panel.active { display: block; }
+
+  /* Aging buckets */
+  .aging-row { display: flex; gap: 12px; }
+  .aging-bucket { flex: 1; border-radius: 10px; padding: 14px 16px; border: 1px solid var(--border); }
+  .aging-bucket .ab-lbl { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+  .aging-bucket .ab-val { font-size: 20px; font-weight: 700; margin-top: 6px; }
+  .aging-bucket .ab-count { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+  .aging-ok { background: var(--success-soft); }
+  .aging-ok .ab-lbl { color: var(--success); }
+  .aging-warn { background: var(--warning-soft); }
+  .aging-warn .ab-lbl { color: var(--warning); }
+  .aging-danger { background: var(--danger-soft); }
+  .aging-danger .ab-lbl { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ================= SIDEBAR ================= -->
+  <aside class="sidebar">
+    <div class="brand"><span class="dot"></span> Bora Vender</div>
+
+    <div class="nav-label">Operação</div>
+    <div class="nav-item inert"><span class="ic">🛒</span> Venda</div>
+    <div class="nav-item inert"><span class="ic">📦</span> Estoque</div>
+    <div class="nav-item inert"><span class="ic">💳</span> Devedores</div>
+    <div class="nav-item inert"><span class="ic">🧾</span> Histórico de vendas</div>
+    <div class="nav-item inert"><span class="ic">▦</span> Dashboard</div>
+
+    <!-- Único item funcional deste mockup — os acima são só contexto visual de onde "Relatórios" fica no menu real. -->
+    <div class="nav-item active" id="nav-relatorios"><span class="ic">📊</span> Relatórios <span class="nav-caret open" id="relatorios-caret">▸</span></div>
+    <div class="nav-sub open" id="relatorios-sub">
+      <div class="nav-sub-label">Vendas</div>
+      <div class="nav-item nav-sub-item active" data-screen="vendas-periodo">Vendas por período</div>
+      <div class="nav-item nav-sub-item" data-screen="vendas-categoria-item">Vendas por categoria / item</div>
+      <div class="nav-item nav-sub-item" data-screen="vendas-forma-pagamento">Vendas por forma de pagamento</div>
+      <div class="nav-item nav-sub-item" data-screen="vendas-operador">Vendas por operador</div>
+      <div class="nav-item nav-sub-item" data-screen="comparativo-periodos">Comparativo de períodos</div>
+      <div class="nav-item nav-sub-item" data-screen="ticket-medio">Ticket médio</div>
+      <div class="nav-item nav-sub-item" data-screen="descontos-concedidos">Descontos concedidos</div>
+      <div class="nav-item nav-sub-item" data-screen="vendas-canceladas">Vendas canceladas</div>
+      <div class="nav-item nav-sub-item" data-screen="margem-lucro">Margem / lucro</div>
+
+      <div class="nav-sub-label">Estoque</div>
+      <div class="nav-item nav-sub-item" data-screen="movimentacao-estoque">Movimentação de estoque</div>
+      <div class="nav-item nav-sub-item" data-screen="historico-preco">Histórico de alteração de preço</div>
+      <div class="nav-item nav-sub-item" data-screen="estoque-valorizado">Estoque valorizado por categoria</div>
+      <div class="nav-item nav-sub-item" data-screen="itens-parados">Itens sem movimento</div>
+      <div class="nav-item nav-sub-item" data-screen="ruptura-estoque">Previsão de ruptura</div>
+
+      <div class="nav-sub-label">Crediário / Devedores</div>
+      <div class="nav-item nav-sub-item" data-screen="inadimplencia-aging">Inadimplência (aging)</div>
+      <div class="nav-item nav-sub-item" data-screen="pagamentos-recebidos">Pagamentos recebidos</div>
+      <div class="nav-item nav-sub-item" data-screen="pagamentos-cancelados">Pagamentos cancelados</div>
+
+      <div class="nav-sub-label">Auditoria</div>
+      <div class="nav-item nav-sub-item" data-screen="autorizacoes-admin">Autorizações de Administrador</div>
+    </div>
+
+    <div class="nav-label">Administração</div>
+    <div class="nav-item inert"><span class="ic">👤</span> Usuários</div>
+    <div class="nav-item inert"><span class="ic">⚙️</span> Configurações</div>
+
+    <div class="sidebar-foot">
+      <div>v0.1 · mockup estático — só "Relatórios" é interativo aqui</div>
+    </div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <div class="main">
+    <div class="topbar">
+      <h1 id="topbar-title">Vendas por período <span class="sub">Total vendido e nº de vendas em um intervalo</span></h1>
+      <div class="topbar-right"><span class="badge badge-admin">Perfil: Administrador</span></div>
+    </div>
+
+    <div class="content">
+      <div class="note-banner">
+        Mockup exclusivo dos <strong>Relatórios</strong> (candidatos listados em <code>Plans/PLANO.md</code>), com dados
+        fictícios. "Relatórios" no menu <strong>não navega direto — expande</strong> um submenu agrupado por assunto
+        (decisão já registrada no plano); cada relatório abre sua própria tela com filtro próprio, em vez de tudo
+        empilhado numa página só.
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- VENDAS                                                        -->
+      <!-- ============================================================ -->
+      <section class="screen active" data-screen="vendas-periodo">
+        <div class="toolbar">
+          <select class="input"><option>Últimos 7 dias</option><option>Este mês</option><option>Personalizado...</option></select>
+          <div class="spacer"></div>
+          <button class="btn">⭱ Exportar CSV</button>
+          <button class="btn">⭱ Exportar PDF</button>
+        </div>
+        <div class="grid grid-4" style="margin-bottom:18px;">
+          <div class="card stat-card"><div class="lbl">Total vendido</div><div class="val">R$ 3.240,60</div></div>
+          <div class="card stat-card"><div class="lbl">Nº de vendas</div><div class="val">37</div></div>
+          <div class="card stat-card"><div class="lbl">Ticket médio</div><div class="val">R$ 87,58</div></div>
+          <div class="card stat-card"><div class="lbl">Dia de pico</div><div class="val">Sáb · R$ 640,90</div></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Vendas por dia</h3><span class="hint">últimos 7 dias</span></div>
+          <div class="card-pad">
+            <div class="axis-chart">
+              <div class="axis-y"><span>R$700</span><span>R$525</span><span>R$350</span><span>R$175</span><span>R$0</span></div>
+              <div class="axis-body">
+                <div class="axis-area">
+                  <div class="abar" style="height:52%"><span class="abar-val">364</span></div>
+                  <div class="abar" style="height:40%"><span class="abar-val">280</span></div>
+                  <div class="abar" style="height:63%"><span class="abar-val">441</span></div>
+                  <div class="abar" style="height:35%"><span class="abar-val">245</span></div>
+                  <div class="abar" style="height:58%"><span class="abar-val">406</span></div>
+                  <div class="abar" style="height:91%"><span class="abar-val">641</span></div>
+                  <div class="abar" style="height:70%"><span class="abar-val">490</span></div>
+                </div>
+                <div class="axis-x"><span>11/09</span><span>12/09</span><span>13/09</span><span>14/09</span><span>15/09</span><span>16/09</span><span>17/09</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="vendas-categoria-item">
+        <div class="toolbar">
+          <select class="input"><option>Este mês</option><option>Últimos 7 dias</option></select>
+          <div class="spacer"></div>
+          <div class="variant-switch" data-group="vci">
+            <button class="active" data-variant="categoria">Por categoria</button>
+            <button data-variant="item">Por item</button>
+          </div>
+        </div>
+        <div class="variant-panel active" data-group="vci" data-variant="categoria">
+          <div class="card">
+            <div class="card-head"><h3>Vendas por categoria</h3><span class="hint">mês atual</span></div>
+            <div class="card-pad">
+              <div class="donut-row">
+                <div class="donut" style="background: conic-gradient(var(--primary) 0% 43%, var(--info) 43% 61%, var(--success) 61% 78%, #d7dae2 78% 100%);">
+                  <div class="donut-center"><div class="dc-val">R$ 331,5k</div><div class="dc-lbl">total</div></div>
+                </div>
+                <div class="legend-list">
+                  <div class="legend-row"><span class="legend-dot" style="background:var(--primary);"></span><span class="lg-lbl">Elétrica</span><span class="lg-val">43%</span></div>
+                  <div class="legend-row"><span class="legend-dot" style="background:var(--info);"></span><span class="lg-lbl">Ferragens</span><span class="lg-val">18%</span></div>
+                  <div class="legend-row"><span class="legend-dot" style="background:var(--success);"></span><span class="lg-lbl">Papelaria</span><span class="lg-val">17%</span></div>
+                  <div class="legend-row"><span class="legend-dot" style="background:#d7dae2;"></span><span class="lg-lbl badge-muted-cat" style="font-style:italic;">Categoria indefinida</span><span class="lg-val">22%</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="variant-panel" data-group="vci" data-variant="item">
+          <div class="card">
+            <div class="card-head"><h3>Vendas por item</h3><span class="hint">mês atual, ordenado por quantidade</span></div>
+            <table class="tbl">
+              <thead><tr><th>Item</th><th>Categoria</th><th class="num">Qtd. vendida</th><th class="num">Total</th></tr></thead>
+              <tbody>
+                <tr><td>Caneta</td><td>Papelaria</td><td class="num">21</td><td class="num">R$ 42,00</td></tr>
+                <tr><td>Lâmpada LED 9W</td><td>Elétrica</td><td class="num">14</td><td class="num">R$ 175,00</td></tr>
+                <tr><td>Fita isolante 19mm</td><td>Elétrica</td><td class="num">11</td><td class="num">R$ 75,90</td></tr>
+                <tr><td>Detergente 500ml</td><td>Limpeza</td><td class="num">9</td><td class="num">R$ 49,50</td></tr>
+                <tr><td>Parafuso M6 20mm</td><td>Ferragens</td><td class="num">8</td><td class="num">R$ 6,40</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="vendas-forma-pagamento">
+        <div class="toolbar">
+          <select class="input"><option>Este mês</option><option>Últimos 7 dias</option></select>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Vendas por forma de pagamento</h3><span class="hint">mês atual · 25 vendas</span></div>
+          <div class="card-pad">
+            <div class="donut-row">
+              <div class="donut" style="background: conic-gradient(var(--success) 0% 20%, var(--primary) 20% 52%, var(--info) 52% 68%, var(--warning) 68% 100%);">
+                <div class="donut-center"><div class="dc-val">25</div><div class="dc-lbl">vendas</div></div>
+              </div>
+              <div class="legend-list">
+                <div class="legend-row"><span class="legend-dot" style="background:var(--success);"></span><span class="lg-lbl">Dinheiro</span><span class="lg-val">20%</span></div>
+                <div class="legend-row"><span class="legend-dot" style="background:var(--primary);"></span><span class="lg-lbl">Cartão</span><span class="lg-val">32%</span></div>
+                <div class="legend-row"><span class="legend-dot" style="background:var(--info);"></span><span class="lg-lbl">PIX</span><span class="lg-val">16%</span></div>
+                <div class="legend-row"><span class="legend-dot" style="background:var(--warning);"></span><span class="lg-lbl">Crediário</span><span class="lg-val">32%</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="vendas-operador">
+        <div class="toolbar">
+          <select class="input"><option>Este mês</option><option>Últimos 7 dias</option></select>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Vendas por operador</h3><span class="hint">mês atual</span></div>
+          <table class="tbl">
+            <thead><tr><th>Operador</th><th class="num">Nº de vendas</th><th class="num">Total vendido</th><th class="num">Ticket médio</th></tr></thead>
+            <tbody>
+              <tr><td>Mayara Silva</td><td class="num">18</td><td class="num">R$ 1.480,30</td><td class="num">R$ 82,24</td></tr>
+              <tr><td>Welbert Serra</td><td class="num">7</td><td class="num">R$ 612,00</td><td class="num">R$ 87,43</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="comparativo-periodos">
+        <div class="toolbar">
+          <select class="input"><option>Setembro/2026</option></select>
+          <span style="color:var(--text-muted);font-size:13px;">vs.</span>
+          <select class="input"><option>Agosto/2026</option></select>
+        </div>
+        <div class="grid grid-2">
+          <div class="card stat-card">
+            <div class="lbl">Setembro/2026</div>
+            <div class="val">R$ 3.315,10</div>
+            <div class="delta down">▼ 3,1% vs. período anterior</div>
+          </div>
+          <div class="card stat-card">
+            <div class="lbl">Agosto/2026</div>
+            <div class="val">R$ 3.421,90</div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <div class="card-head"><h3>Detalhamento</h3></div>
+          <table class="tbl">
+            <thead><tr><th>Métrica</th><th class="num">Setembro/2026</th><th class="num">Agosto/2026</th><th class="num">Variação</th></tr></thead>
+            <tbody>
+              <tr><td>Total vendido</td><td class="num">R$ 3.315,10</td><td class="num">R$ 3.421,90</td><td class="num" style="color:var(--danger)">-3,1%</td></tr>
+              <tr><td>Nº de vendas</td><td class="num">25</td><td class="num">22</td><td class="num" style="color:var(--success)">+13,6%</td></tr>
+              <tr><td>Ticket médio</td><td class="num">R$ 132,60</td><td class="num">R$ 155,54</td><td class="num" style="color:var(--danger)">-14,7%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="ticket-medio">
+        <div class="toolbar">
+          <select class="input"><option>Últimas 6 semanas</option></select>
+        </div>
+        <div class="grid grid-3" style="margin-bottom:18px;">
+          <div class="card stat-card"><div class="lbl">Ticket médio (período)</div><div class="val">R$ 91,20</div></div>
+          <div class="card stat-card"><div class="lbl">Maior venda</div><div class="val">R$ 412,00</div></div>
+          <div class="card stat-card"><div class="lbl">Menor venda</div><div class="val">R$ 6,40</div></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Ticket médio por semana</h3></div>
+          <div class="card-pad">
+            <div class="axis-chart">
+              <div class="axis-y"><span>R$120</span><span>R$90</span><span>R$60</span><span>R$30</span><span>R$0</span></div>
+              <div class="axis-body">
+                <div class="axis-area">
+                  <div class="abar" style="height:70%"><span class="abar-val">84</span></div>
+                  <div class="abar" style="height:65%"><span class="abar-val">78</span></div>
+                  <div class="abar" style="height:80%"><span class="abar-val">96</span></div>
+                  <div class="abar" style="height:60%"><span class="abar-val">72</span></div>
+                  <div class="abar" style="height:88%"><span class="abar-val">106</span></div>
+                  <div class="abar" style="height:76%"><span class="abar-val">91</span></div>
+                </div>
+                <div class="axis-x"><span>S1</span><span>S2</span><span>S3</span><span>S4</span><span>S5</span><span>S6</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="descontos-concedidos">
+        <div class="toolbar">
+          <select class="input"><option>Este mês</option></select>
+          <select class="input"><option>Todos os operadores</option><option>Mayara Silva</option><option>Welbert Serra</option></select>
+        </div>
+        <div class="grid grid-3" style="margin-bottom:18px;">
+          <div class="card stat-card"><div class="lbl">Total concedido</div><div class="val">R$ 89,40</div></div>
+          <div class="card stat-card"><div class="lbl">Vendas com desconto</div><div class="val">4</div></div>
+          <div class="card stat-card"><div class="lbl">Desconto médio</div><div class="val">R$ 22,35</div></div>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Recibo</th><th>Tipo</th><th class="num">Valor</th><th>Autorizado por</th><th>Data</th></tr></thead>
+            <tbody>
+              <tr><td><code>20260917000007</code></td><td>Geral (10%)</td><td class="num">R$ 32,40</td><td>Admin Demo</td><td>17/09 13:10</td></tr>
+              <tr><td><code>20260917000014</code></td><td>Item (Martelo, -15%)</td><td class="num">R$ 5,99</td><td>Admin Demo</td><td>17/09 15:40</td></tr>
+              <tr><td><code>20260917000009</code></td><td>Geral (R$ 2,00)</td><td class="num">R$ 2,00</td><td>Admin Demo (auto)</td><td>17/09 14:00</td></tr>
+              <tr><td><code>20260918000021</code></td><td>Item (Vela aromática, -8%)</td><td class="num">R$ 49,01</td><td>Admin Demo</td><td>18/09 10:05</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="vendas-canceladas">
+        <div class="toolbar">
+          <select class="input"><option>Este mês</option></select>
+        </div>
+        <div class="grid grid-3" style="margin-bottom:18px;">
+          <div class="card stat-card"><div class="lbl">Vendas canceladas</div><div class="val" style="color:var(--danger)">1</div></div>
+          <div class="card stat-card"><div class="lbl">Valor estornado</div><div class="val" style="color:var(--danger)">R$ 24,00</div></div>
+          <div class="card stat-card"><div class="lbl">% do total vendido</div><div class="val">0,7%</div></div>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Recibo</th><th class="num">Valor</th><th>Cancelado por</th><th>Autorizado por</th><th>Data</th></tr></thead>
+            <tbody>
+              <tr><td><code>20260917000019</code></td><td class="num">R$ 24,00</td><td>Usuário Demo</td><td>Admin Demo</td><td>17/09 16:50</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="margem-lucro">
+        <div class="toolbar">
+          <select class="input"><option>Este mês</option></select>
+        </div>
+        <div class="note-banner">
+          Custo considerado é o <strong>vigente na data da venda</strong> (via <code>item_price_history</code>), não o
+          custo atual do item — evita mostrar margem errada quando o custo muda depois de vendido.
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Item</th><th class="num">Qtd. vendida</th><th class="num">Receita</th><th class="num">Custo (na venda)</th><th class="num">Margem</th><th class="num">Margem %</th></tr></thead>
+            <tbody>
+              <tr><td>Lâmpada LED 9W</td><td class="num">14</td><td class="num">R$ 175,00</td><td class="num">R$ 84,00</td><td class="num" style="color:var(--success)">R$ 91,00</td><td class="num">52%</td></tr>
+              <tr><td>Extensão elétrica 5m</td><td class="num">3</td><td class="num">R$ 135,00</td><td class="num">R$ 60,00</td><td class="num" style="color:var(--success)">R$ 75,00</td><td class="num">56%</td></tr>
+              <tr><td>Caneta</td><td class="num">21</td><td class="num">R$ 42,00</td><td class="num">R$ 10,50</td><td class="num" style="color:var(--success)">R$ 31,50</td><td class="num">75%</td></tr>
+              <tr><td>Martelo</td><td class="num">2</td><td class="num">R$ 67,83</td><td class="num">R$ 36,00</td><td class="num" style="color:var(--success)">R$ 31,83</td><td class="num">47%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- ESTOQUE                                                       -->
+      <!-- ============================================================ -->
+      <section class="screen" data-screen="movimentacao-estoque">
+        <div class="toolbar">
+          <select class="input"><option>Todos os itens</option><option>Lâmpada LED 9W</option></select>
+          <select class="input"><option>Todos os tipos</option><option>Venda</option><option>Entrada</option><option>Ajuste</option><option>Estorno</option></select>
+          <select class="input"><option>Este mês</option></select>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Data</th><th>Item</th><th>Tipo</th><th class="num">Quantidade</th><th>Operador</th></tr></thead>
+            <tbody>
+              <tr><td>18/09 10:05</td><td>Vela aromática</td><td><span class="badge badge-info">Venda</span></td><td class="num">-2</td><td>Admin Demo</td></tr>
+              <tr><td>17/09 16:50</td><td>Caderno universitário</td><td><span class="badge badge-danger">Estorno</span></td><td class="num">+1</td><td>Admin Demo</td></tr>
+              <tr><td>17/09 09:20</td><td>Lâmpada LED 9W</td><td><span class="badge badge-success">Entrada</span></td><td class="num">+10</td><td>Usuário Demo</td></tr>
+              <tr><td>15/09 11:00</td><td>Disjuntor 20A</td><td><span class="badge badge-warning">Ajuste</span></td><td class="num">-1</td><td>Admin Demo</td></tr>
+              <tr><td>02/09 08:40</td><td>Fechadura simples</td><td><span class="badge">Inicial</span></td><td class="num">+3</td><td>Admin Demo</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="historico-preco">
+        <div class="toolbar">
+          <select class="input"><option>Todos os itens</option><option selected>Lâmpada LED 9W</option></select>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Lâmpada LED 9W</h3><span class="hint">linha do tempo de preço</span></div>
+          <table class="tbl">
+            <thead><tr><th>Data</th><th class="num">Custo</th><th class="num">Venda</th><th>Alterado por</th></tr></thead>
+            <tbody>
+              <tr><td>18/09/2026</td><td class="num">R$ 6,80</td><td class="num">R$ 13,90</td><td>Admin Demo</td></tr>
+              <tr><td>02/09/2026</td><td class="num">R$ 6,00</td><td class="num">R$ 12,50</td><td>Admin Demo</td></tr>
+              <tr><td>15/07/2026</td><td class="num">R$ 6,00</td><td class="num">R$ 12,50</td><td><span style="color:var(--text-faint);font-style:italic;">cadastro do item</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="estoque-valorizado">
+        <div class="card">
+          <div class="card-head"><h3>Estoque valorizado por categoria</h3><span class="hint">a custo</span></div>
+          <table class="tbl">
+            <thead><tr><th>Categoria</th><th class="num">Nº de itens</th><th class="num">Valor de custo</th></tr></thead>
+            <tbody>
+              <tr><td>Elétrica</td><td class="num">6</td><td class="num">R$ 612,40</td></tr>
+              <tr><td>Ferragens</td><td class="num">5</td><td class="num">R$ 498,10</td></tr>
+              <tr><td>Papelaria</td><td class="num">3</td><td class="num">R$ 210,00</td></tr>
+              <tr><td>Limpeza</td><td class="num">2</td><td class="num">R$ 148,50</td></tr>
+              <tr><td><span class="badge badge-muted-cat">Categoria indefinida</span></td><td class="num">2</td><td class="num">R$ 216,00</td></tr>
+              <tr style="font-weight:700;"><td>Total</td><td class="num">18</td><td class="num">R$ 1.685,00</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="itens-parados">
+        <div class="toolbar">
+          <select class="input"><option>Sem venda há 30+ dias</option><option>Sem venda há 60+ dias</option></select>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Item</th><th>Categoria</th><th>Última venda</th><th class="num">Dias parado</th><th class="num">Estoque atual</th></tr></thead>
+            <tbody>
+              <tr><td>Fechadura simples</td><td>Ferragens</td><td>—</td><td class="num"><span class="badge badge-danger">nunca vendido</span></td><td class="num">3</td></tr>
+              <tr><td>Conector RJ45</td><td>Elétrica</td><td>—</td><td class="num"><span class="badge badge-danger">nunca vendido</span></td><td class="num">0</td></tr>
+              <tr><td>Vassoura</td><td>Limpeza</td><td>12/08/2026</td><td class="num">37</td><td class="num">15</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="ruptura-estoque">
+        <div class="note-banner warn">
+          Previsão calculada sobre a média de saídas dos últimos 90 dias (ver "Stock-rupture forecast" em
+          <code>docs/future.md</code>) — ainda não implementada, dados abaixo são ilustrativos.
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Item</th><th class="num">Estoque atual</th><th class="num">Consumo médio/dia</th><th class="num">Dias restantes</th></tr></thead>
+            <tbody>
+              <tr><td>Arruela M6</td><td class="num">5</td><td class="num">0,9</td><td class="num"><span class="badge badge-danger">~5 dias</span></td></tr>
+              <tr><td>Disjuntor 20A</td><td class="num">3</td><td class="num">0,3</td><td class="num"><span class="badge badge-warning">~10 dias</span></td></tr>
+              <tr><td>Caneta</td><td class="num">29</td><td class="num">0,7</td><td class="num"><span class="badge badge-success">~41 dias</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- CREDIÁRIO / DEVEDORES                                         -->
+      <!-- ============================================================ -->
+      <section class="screen" data-screen="inadimplencia-aging">
+        <div class="aging-row" style="margin-bottom:18px;">
+          <div class="aging-bucket aging-ok"><div class="ab-lbl">0–7 dias</div><div class="ab-val">R$ 25,00</div><div class="ab-count">1 cliente</div></div>
+          <div class="aging-bucket aging-warn"><div class="ab-lbl">8–30 dias</div><div class="ab-val">R$ 34,90</div><div class="ab-count">1 cliente</div></div>
+          <div class="aging-bucket aging-danger"><div class="ab-lbl">30+ dias</div><div class="ab-val">R$ 30,00</div><div class="ab-count">1 cliente</div></div>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Cliente</th><th class="num">Saldo</th><th>Vencido desde</th><th class="num">Dias em atraso</th><th>Faixa</th></tr></thead>
+            <tbody>
+              <tr><td>Ana Souza</td><td class="num">R$ 25,00</td><td>14/09/2026</td><td class="num">4</td><td><span class="badge badge-success">0–7 dias</span></td></tr>
+              <tr><td>Elaine Costa</td><td class="num">R$ 34,90</td><td>02/09/2026</td><td class="num">16</td><td><span class="badge badge-warning">8–30 dias</span></td></tr>
+              <tr><td>Carla Mendes</td><td class="num">R$ 30,00</td><td>10/08/2026</td><td class="num">39</td><td><span class="badge badge-danger">30+ dias</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="pagamentos-recebidos">
+        <div class="toolbar"><select class="input"><option>Este mês</option></select></div>
+        <div class="grid grid-2" style="margin-bottom:18px;">
+          <div class="card stat-card"><div class="lbl">Total recebido</div><div class="val" style="color:var(--success)">R$ 54,50</div></div>
+          <div class="card stat-card"><div class="lbl">Pagamentos registrados</div><div class="val">4</div></div>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Data</th><th>Cliente</th><th class="num">Valor</th><th>Registrado por</th></tr></thead>
+            <tbody>
+              <tr><td>16/09/2026</td><td>Ana Souza</td><td class="num">R$ 20,00</td><td>Admin Demo</td></tr>
+              <tr><td>13/09/2026</td><td>Bruno Lima</td><td class="num">R$ 5,00</td><td>Usuário Demo</td></tr>
+              <tr><td>10/09/2026</td><td>Diego Rocha</td><td class="num">R$ 9,50</td><td>Usuário Demo</td></tr>
+              <tr><td>17/09/2026</td><td>Elaine Costa</td><td class="num">R$ 20,00</td><td>Admin Demo</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="pagamentos-cancelados">
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Data</th><th>Cliente</th><th class="num">Valor</th><th>Cancelado por</th><th>Autorizado por</th><th>Motivo</th></tr></thead>
+            <tbody>
+              <tr><td>05/09/2026</td><td>Bruno Lima</td><td class="num">R$ 5,00</td><td>Usuário Demo</td><td>Admin Demo</td><td>Valor lançado em duplicidade</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- AUDITORIA                                                     -->
+      <!-- ============================================================ -->
+      <section class="screen" data-screen="autorizacoes-admin">
+        <div class="toolbar">
+          <select class="input"><option>Todas as ações</option><option>Desconto</option><option>Cancelamento de venda</option><option>Cancelamento de pagamento</option><option>Renomear cliente</option></select>
+          <select class="input"><option>Este mês</option></select>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Data</th><th>Ação</th><th>Solicitado por</th><th>Autorizado por</th><th>Detalhe</th></tr></thead>
+            <tbody>
+              <tr><td>18/09 10:05</td><td><span class="badge badge-info">Desconto</span></td><td>Usuário Demo</td><td>Admin Demo</td><td>-8% em Vela aromática (venda <code>20260918000021</code>)</td></tr>
+              <tr><td>17/09 16:50</td><td><span class="badge badge-danger">Cancelamento de venda</span></td><td>Usuário Demo</td><td>Admin Demo</td><td>Venda <code>20260917000019</code>, R$ 24,00</td></tr>
+              <tr><td>05/09 14:20</td><td><span class="badge badge-warning">Cancelamento de pagamento</span></td><td>Usuário Demo</td><td>Admin Demo</td><td>Pagamento de Bruno Lima, R$ 5,00</td></tr>
+              <tr><td>29/08 09:10</td><td><span class="badge">Renomear cliente</span></td><td>Usuário Demo</td><td>Admin Demo</td><td>"Carla M." → "Carla Mendes" (saldo em aberto)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const titles = {
+    'vendas-periodo': ['Vendas por período', 'Total vendido e nº de vendas em um intervalo'],
+    'vendas-categoria-item': ['Vendas por categoria / item', 'Distribuição das vendas, por categoria ou por item'],
+    'vendas-forma-pagamento': ['Vendas por forma de pagamento', 'Dinheiro, Cartão, PIX e Crediário no período'],
+    'vendas-operador': ['Vendas por operador', 'Quem vendeu o quê, quanto, no período'],
+    'comparativo-periodos': ['Comparativo de períodos', 'Um período contra outro, à escolha'],
+    'ticket-medio': ['Ticket médio', 'Total vendido ÷ nº de vendas, ao longo do tempo'],
+    'descontos-concedidos': ['Descontos concedidos', 'Quanto, por quem foi autorizado, em quais vendas'],
+    'vendas-canceladas': ['Vendas canceladas', 'Cancelamentos/estornos do período'],
+    'margem-lucro': ['Margem / lucro', 'Preço de venda menos custo — vigente na data da venda'],
+    'movimentacao-estoque': ['Movimentação de estoque', 'Consulta do ledger stock_movements'],
+    'historico-preco': ['Histórico de alteração de preço', 'Consulta do ledger item_price_history'],
+    'estoque-valorizado': ['Estoque valorizado por categoria', 'Valor de custo do estoque atual'],
+    'itens-parados': ['Itens sem movimento', 'Itens sem venda há N dias — candidatos a promoção/descontinuação'],
+    'ruptura-estoque': ['Previsão de ruptura', 'Estimativa de dias restantes de estoque'],
+    'inadimplencia-aging': ['Inadimplência (aging)', 'Saldo em aberto agrupado por faixa de atraso'],
+    'pagamentos-recebidos': ['Pagamentos recebidos', 'Quitações de Crediário no período'],
+    'pagamentos-cancelados': ['Pagamentos cancelados', 'Auditoria de pagamentos revertidos'],
+    'autorizacoes-admin': ['Autorizações de Administrador', 'Toda ação que precisou de senha de Admin, num só lugar'],
+  };
+
+  const caret = document.getElementById('relatorios-caret');
+  const sub = document.getElementById('relatorios-sub');
+  document.getElementById('nav-relatorios').addEventListener('click', () => {
+    const open = sub.classList.toggle('open');
+    caret.classList.toggle('open', open);
+  });
+
+  document.querySelectorAll('.nav-sub-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.nav-sub-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+      const key = item.dataset.screen;
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.querySelector(`.screen[data-screen="${key}"]`).classList.add('active');
+      const [title, subt] = titles[key];
+      document.getElementById('topbar-title').innerHTML = `${title} <span class="sub">${subt}</span>`;
+    });
+  });
+
+  document.querySelectorAll('.variant-switch[data-group]').forEach(sw => {
+    sw.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const group = sw.dataset.group;
+        sw.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll(`.variant-panel[data-group="${group}"]`).forEach(p => p.classList.remove('active'));
+        document.querySelector(`.variant-panel[data-group="${group}"][data-variant="${btn.dataset.variant}"]`).classList.add('active');
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

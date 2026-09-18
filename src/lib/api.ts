@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { PAYMENT_METHOD_LABEL, fmtDateTime } from "./format";
 import { logger } from "../logger";
 
 export async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -390,6 +391,56 @@ export function getSaleDetail(saleId: number) {
  * cliente/operador client-side, same convention as `listItems`/`listClients`. */
 export function listSales() {
   return call<SaleListItem[]>("list_sales");
+}
+
+/** One row of a sales CSV export — already display-formatted (see
+ * `toSaleCsvRows`), matching `src-tauri/src/models.rs`'s `SaleCsvRow`. */
+export type SaleCsvRow = {
+  receiptNumber: string;
+  createdAt: string;
+  clientName: string;
+  userName: string;
+  paymentMethod: string;
+  discount: number;
+  total: number;
+  status: string;
+};
+
+export function exportSalesCsv(path: string, rows: SaleCsvRow[]) {
+  return call<void>("export_sales_csv", { path, rows });
+}
+
+/** One (label, value) pair from a report's stat cards — matches
+ * `src-tauri/src/models.rs`'s `ReportPdfStatInput`. */
+export type ReportPdfStat = { label: string; value: string };
+
+/** PDF counterpart of `exportSalesCsv` — same rows, plus the report's own
+ * title/subtitle and stat cards (whatever the caller already has on
+ * screen). Deliberately doesn't reproduce the on-screen chart — see
+ * `src-tauri/src/pdf_util.rs`'s doc comment for why. */
+export function exportSalesReportPdf(path: string, title: string, subtitle: string, stats: ReportPdfStat[], rows: SaleCsvRow[]) {
+  return call<void>("export_sales_report_pdf", { path, title, subtitle, stats, rows });
+}
+
+/** Shapes already-fetched `SaleListItem`s into the rows `exportSalesCsv`
+ * writes to disk — shared by `SalesHistoryPage` and `VendasPorPeriodoPage`
+ * so both "Exportar CSV" buttons produce the same column shape. Values are
+ * display-formatted (pt-BR date, payment method label, "Concluída"/
+ * "Cancelada") rather than raw codes, since this export has no re-import
+ * counterpart (unlike Estoque's CSV) — it's a read-only artifact for the
+ * shop owner, not meant to round-trip. `total`/`discount` stay plain
+ * numbers, not "R$"-formatted strings, so a spreadsheet still sums them. */
+export function toSaleCsvRows(sales: SaleListItem[]): SaleCsvRow[] {
+  return sales.map((s) => ({
+    receiptNumber: s.receiptNumber,
+    createdAt: fmtDateTime(s.createdAt),
+    clientName: s.clientName ?? "",
+    userName: s.userName,
+    paymentMethod: PAYMENT_METHOD_LABEL[s.paymentMethod] ?? s.paymentMethod,
+    discount: s.discountValue,
+    total: s.total,
+    status: s.status === "cancelled" ? "Cancelada" : "Concluída",
+  }));
 }
 
 /** Cancels/reverses a completed sale — reverses stock and, for a Crediário

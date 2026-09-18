@@ -7,6 +7,7 @@ pub mod db;
 mod guard;
 mod models;
 mod money;
+mod pdf_util;
 
 use rusqlite::Connection;
 use std::path::PathBuf;
@@ -81,6 +82,8 @@ pub fn run() {
             commands::sales::get_sale_detail,
             commands::sales::list_sales,
             commands::sales::cancel_sale,
+            commands::sales::export_sales_csv,
+            commands::sales::export_sales_report_pdf,
             commands::receipts::regenerate_receipt_pdf,
             commands::receipts::print_file,
             commands::receipts::open_receipts_folder,

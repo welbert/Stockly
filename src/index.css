@@ -102,4 +102,42 @@
   button:not(:disabled) {
     cursor: pointer;
   }
+
+  /* Custom scrollbar — the native one doesn't match the app's rounded/token
+     look. Sized deliberately: not the hairline "modern minimal" scrollbar
+     (the target user isn't a power user and reads with glasses, so it needs
+     to stay easy to see and to grab). Webkit-only (`::-webkit-scrollbar-*`)
+     is enough — the app only ships on Windows/WebView2 (Chromium), see
+     CLAUDE.md's build target. Applies to both scroll axes automatically
+     (no `:horizontal`/`:vertical` split needed).
+     Color is theme-aware (`--theme-4`/`--theme-3`, not the lighter
+     `--theme-hover-strong` — that one read as too subtle at rest) — flat
+     white doesn't work here, it nearly disappears against the light theme's
+     `--theme-bg`. The sidebar is a separate rule below because it's always
+     dark regardless of theme, where flat white is exactly right. */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--theme-4);
+    border-radius: 999px;
+    /* Transparent border + padding-box clip insets the thumb from the track
+       edges without needing to match whatever background sits behind it. */
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--theme-3);
+  }
+
+  .sidebar-nav::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.9);
+  }
+  .sidebar-nav::-webkit-scrollbar-thumb:hover {
+    background-color: #ffffff;
+  }
 }

@@ -21,6 +21,14 @@ export function fmtDateTime(sqliteDatetime: string): string {
   return date.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+/** `YYYY-MM-DD` local (não UTC) de um `datetime('now')` do SQLite — mesma
+ * conversão de `fmtDateTime`, usado pra comparar contra `<input type="date">`
+ * ou pra agrupar vendas por dia (ex.: relatórios, gráfico "vendas por dia"). */
+export function localDateKey(sqliteDatetime: string): string {
+  const d = new Date(sqliteDatetime.replace(" ", "T") + "Z");
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /** Remove acentos e normaliza pra minúsculas — usado por toda busca de texto
  * do app (Estoque, PDV) pra casar "lampada" com "Lâmpada". */
 export function normalize(text: string): string {

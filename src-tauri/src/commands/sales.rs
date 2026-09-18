@@ -1,9 +1,13 @@
 use super::clients::client_balance;
+use crate::csv_util;
 use crate::guard::{active_user_id, resolve_admin_authorization};
-use crate::models::{SaleDetail, SaleItemDetail, SaleItemInput, SaleListItem};
-use crate::money::round2;
+use crate::models::{ReportPdfStatInput, SaleCsvRow, SaleDetail, SaleItemDetail, SaleItemInput, SaleListItem};
+use crate::money::{fmt_money, round2};
+use crate::pdf_util::{self, fmt_discount, ReportPdfStat, ReportPdfTable};
 use crate::AppState;
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::Serialize;
+use std::path::Path;
 use tauri::State;
 
 const VALID_PAYMENT_METHODS: &[&str] = &["cash", "card", "pix", "credit"];
@@ -255,6 +259,121 @@ pub fn list_sales(state: State<AppState>) -> Result<Vec<SaleListItem>, String> {
         })
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// The actual on-disk shape of a sales CSV row — Portuguese headers via
+/// `rename`, same reasoning and split as `commands::items::ItemCsvFileRow`:
+/// kept separate from `SaleCsvRow` (the JSON/IPC shape the frontend already
+/// sends, camelCase) so a header chosen for the spreadsheet never leaks into
+/// what the frontend has to parse. Values are pre-formatted strings/plain
+/// numbers, not raw codes — the frontend already shaped them for display
+/// (`toSaleCsvRows` in `src/lib/api.ts`), since this export is a read-only
+/// artifact for the shop owner (no re-import counterpart, unlike Estoque's).
+#[derive(Serialize)]
+struct SaleCsvFileRow {
+    #[serde(rename = "recibo")]
+    receipt_number: String,
+    #[serde(rename = "data")]
+    created_at: String,
+    #[serde(rename = "cliente")]
+    client_name: String,
+    #[serde(rename = "operador")]
+    user_name: String,
+    #[serde(rename = "forma_pagamento")]
+    payment_method: String,
+    #[serde(rename = "desconto")]
+    discount: f64,
+    #[serde(rename = "total")]
+    total: f64,
+    #[serde(rename = "status")]
+    status: String,
+}
+
+impl From<&SaleCsvRow> for SaleCsvFileRow {
+    fn from(row: &SaleCsvRow) -> Self {
+        Self {
+            receipt_number: row.receipt_number.clone(),
+            created_at: row.created_at.clone(),
+            client_name: row.client_name.clone(),
+            user_name: row.user_name.clone(),
+            payment_method: row.payment_method.clone(),
+            discount: row.discount,
+            total: row.total,
+            status: row.status.clone(),
+        }
+    }
+}
+
+/// Any logged-in profile — same access as `list_sales`, which both
+/// `SalesHistoryPage` and the Admin-only `VendasPorPeriodoPage` already call;
+/// this just writes whatever rows the caller already filtered/formatted on
+/// screen to `path` (already chosen via the frontend's save dialog). No DB
+/// access needed: the rows travel in the call, this command only owns the
+/// CSV file mechanics (delimiter, BOM, headers — see `csv_util`).
+#[tauri::command]
+pub fn export_sales_csv(state: State<AppState>, path: String, rows: Vec<SaleCsvRow>) -> Result<(), String> {
+    active_user_id(&state)?;
+    let file_rows: Vec<SaleCsvFileRow> = rows.iter().map(SaleCsvFileRow::from).collect();
+    csv_util::write_csv(Path::new(&path), &file_rows)
+}
+
+/// The PDF counterpart of `export_sales_csv` — same rows, same access (any
+/// logged-in profile), no DB access needed. Built on `pdf_util::write_report_pdf`
+/// (the generic "stat summary + table" report layout — see its own doc
+/// comment for why it deliberately doesn't try to reproduce the on-screen
+/// chart). `title`/`subtitle`/`stats` are whatever the calling report screen
+/// already has on hand (its header text and stat cards) — this command only
+/// owns the PDF file mechanics, same division of responsibility as the CSV export.
+#[tauri::command]
+pub fn export_sales_report_pdf(
+    state: State<AppState>,
+    path: String,
+    title: String,
+    subtitle: String,
+    stats: Vec<ReportPdfStatInput>,
+    rows: Vec<SaleCsvRow>,
+) -> Result<(), String> {
+    active_user_id(&state)?;
+    let pdf_stats: Vec<ReportPdfStat> =
+        stats.into_iter().map(|s| ReportPdfStat { label: s.label, value: s.value }).collect();
+    let table = ReportPdfTable {
+        headers: vec![
+            "Recibo".into(),
+            "Data".into(),
+            "Cliente".into(),
+            "Operador".into(),
+            "Pagamento".into(),
+            "Desconto".into(),
+            "Total".into(),
+            "Status".into(),
+        ],
+        // Not proportional to header length — "Recibo" is always exactly 14
+        // digits with no space to wrap at (`{yyyyMMdd}{6-digit sequential}`,
+        // see `create_sale`), so it needs real room at `write_report_pdf`'s
+        // 7pt table font: a `Paragraph` that can't fit an unbreakable word
+        // drops it silently instead of overflowing the cell, so a column
+        // even ~1mm too narrow here would blank out receipt numbers rather
+        // than just look cramped. "Data" (e.g. "17/09/2026, 15:53") is the
+        // next-widest realistic cell, but has a wrap point (the comma), so
+        // it degrades gracefully onto two lines if it ever doesn't fit.
+        column_weights: vec![6, 8, 5, 5, 4, 4, 4, 4],
+        rows: rows
+            .iter()
+            .map(|r| {
+                vec![
+                    r.receipt_number.clone(),
+                    r.created_at.clone(),
+                    if r.client_name.is_empty() { "—".to_string() } else { r.client_name.clone() },
+                    r.user_name.clone(),
+                    r.payment_method.clone(),
+                    fmt_discount(r.discount),
+                    fmt_money(r.total),
+                    r.status.clone(),
+                ]
+            })
+            .collect(),
+    };
+    pdf_util::write_report_pdf(Path::new(&path), &title, &subtitle, &pdf_stats, &table)
 }
 
 /// Cancels/estorna a completed sale — never deletes it, flips `status` to
@@ -520,4 +639,34 @@ pub fn create_sale(
         .map(|p| p.to_string_lossy().to_string());
 
     fetch_sale_detail(&conn, sale_id, receipt_pdf_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression test for the same bug class `ItemCsvRow`/`ItemCsvFileRow`
+    /// hit once already: the on-disk CSV shape (Portuguese headers) must
+    /// never be the same struct the frontend exchanges over JSON — writing
+    /// through `SaleCsvFileRow` here, never `SaleCsvRow` directly.
+    #[test]
+    fn sale_csv_file_row_round_trips_through_csv_util_with_portuguese_headers() {
+        let path = std::env::temp_dir().join("stockly_test_sales_csv_roundtrip.csv");
+        let row = SaleCsvRow {
+            receipt_number: "20260918000001".into(),
+            created_at: "18/09/2026 15:53".into(),
+            client_name: "".into(),
+            user_name: "Admin Demo".into(),
+            payment_method: "Cartão".into(),
+            discount: 0.0,
+            total: 24.0,
+            status: "Concluída".into(),
+        };
+        csv_util::write_csv(&path, &[SaleCsvFileRow::from(&row)]).unwrap();
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        std::fs::remove_file(&path).ok();
+        assert!(content.contains("recibo;data;cliente;operador;forma_pagamento;desconto;total;status"));
+        assert!(content.contains("20260918000001"));
+    }
 }

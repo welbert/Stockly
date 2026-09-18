@@ -1,28 +1,14 @@
 use crate::commands::config::{config_string, DEFAULT_THANK_YOU_MESSAGE, RECEIPT_THANK_YOU_KEY, STORE_INFO_KEY, STORE_NAME_KEY};
 use crate::guard::active_user_id;
+use crate::money::fmt_money;
+use crate::pdf_util::font_family;
 use crate::AppState;
 use chrono::{Local, NaiveDateTime, TimeZone, Utc};
-use genpdf::{elements, fonts, style, Alignment, Document, Element};
+use genpdf::{elements, style, Alignment, Document, Element};
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::State;
-
-/// Courier Prime (SIL OFL license, see `assets/fonts/OFL.txt`) — embedded in
-/// the binary via `include_bytes!` rather than loaded from a directory at
-/// runtime, so packaging never depends on resolving a resource path.
-fn font_family() -> Result<genpdf::fonts::FontFamily<fonts::FontData>, String> {
-    let regular = include_bytes!("../../assets/fonts/CourierPrime-Regular.ttf").to_vec();
-    let bold = include_bytes!("../../assets/fonts/CourierPrime-Bold.ttf").to_vec();
-    let italic = include_bytes!("../../assets/fonts/CourierPrime-Italic.ttf").to_vec();
-    let bold_italic = include_bytes!("../../assets/fonts/CourierPrime-BoldItalic.ttf").to_vec();
-    Ok(fonts::FontFamily {
-        regular: fonts::FontData::new(regular, None).map_err(|e| e.to_string())?,
-        bold: fonts::FontData::new(bold, None).map_err(|e| e.to_string())?,
-        italic: fonts::FontData::new(italic, None).map_err(|e| e.to_string())?,
-        bold_italic: fonts::FontData::new(bold_italic, None).map_err(|e| e.to_string())?,
-    })
-}
 
 /// `<pasta de dados do app>/recibos/` — sibling of `stockly.db`, not inside it.
 pub(crate) fn receipts_dir(db_path: &Path) -> PathBuf {
@@ -39,22 +25,6 @@ fn fmt_local_datetime(sqlite_utc: &str) -> String {
         Ok(naive) => Utc.from_utc_datetime(&naive).with_timezone(&Local).format("%d/%m/%Y %H:%M:%S").to_string(),
         Err(_) => sqlite_utc.to_string(),
     }
-}
-
-fn fmt_money(value: f64) -> String {
-    let negative = value < 0.0;
-    let cents = (value.abs() * 100.0).round() as i64;
-    let (reais, cents) = (cents / 100, cents % 100);
-    let digits: Vec<char> = reais.to_string().chars().rev().collect();
-    let mut grouped = String::new();
-    for (i, c) in digits.iter().enumerate() {
-        if i > 0 && i % 3 == 0 {
-            grouped.push('.');
-        }
-        grouped.push(*c);
-    }
-    let reais_str: String = grouped.chars().rev().collect();
-    format!("{}R$ {reais_str},{cents:02}", if negative { "-" } else { "" })
 }
 
 fn push_line(doc: &mut Document, label: impl Into<String>, value: impl Into<String>, bold: bool) {
