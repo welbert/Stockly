@@ -3,6 +3,7 @@ import { ReactNode, useEffect } from "react";
 const SIZE_CLASSES = {
   sm: "max-w-sm",
   lg: "max-w-3xl",
+  xl: "max-w-5xl",
 };
 
 interface ModalProps {
@@ -11,7 +12,7 @@ interface ModalProps {
   onClose?: () => void;
   /** Sem botão de fechar nem clique fora fecha — usado pela tela de bloqueio. */
   dismissible?: boolean;
-  /** `lg` only for content that needs extra width (e.g. a keyboard diagram) — defaults to `sm`. */
+  /** `lg`/`xl` only for content that needs extra width (e.g. a keyboard diagram, a CSV import review table) — defaults to `sm`. */
   size?: keyof typeof SIZE_CLASSES;
 }
 

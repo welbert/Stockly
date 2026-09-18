@@ -187,6 +187,66 @@ export function deactivateItem(itemId: number) {
   return call<ItemSummary>("deactivate_item", { itemId });
 }
 
+/** One row of the items CSV export/import — field names in English (the
+ * command's own contract), header labels are Portuguese in the actual file
+ * (see `src-tauri/src/models.rs`'s `ItemCsvRow`). `active` is `"sim"`/`"nao"`,
+ * not a boolean — matches the CSV's own spelling so the review screen can
+ * show it back unchanged. */
+export type ItemCsvRow = {
+  code: string;
+  name: string;
+  category: string;
+  costPrice: number;
+  salePrice: number;
+  quantity: number;
+  minQuantity: number | null;
+  active: string;
+};
+
+export type ItemCsvFieldDiff = { field: string; current: string; new: string };
+
+export type ItemCsvNewRow = {
+  rowLine: number;
+  row: ItemCsvRow;
+  suggestedItemId: number | null;
+  suggestedItemName: string | null;
+};
+
+export type ItemCsvChangedRow = { rowLine: number; itemId: number; diffs: ItemCsvFieldDiff[]; row: ItemCsvRow };
+
+export type ItemCsvMissingItem = { itemId: number; code: string; name: string; quantity: number };
+
+export type ItemCsvRowError = { line: number; message: string };
+
+export type ItemsCsvImportPreview = {
+  newItems: ItemCsvNewRow[];
+  changedItems: ItemCsvChangedRow[];
+  missingItems: ItemCsvMissingItem[];
+  errors: ItemCsvRowError[];
+};
+
+export type MissingItemAction = "keep" | "zero" | "deactivate";
+
+export type ItemsCsvImportDecision = {
+  creates: { row: ItemCsvRow }[];
+  updates: { itemId: number; row: ItemCsvRow; keepExistingName: boolean }[];
+  missingActions: { itemId: number; action: MissingItemAction }[];
+};
+
+export type ItemsCsvImportResult = { created: number; updated: number; missingHandled: number };
+
+export function exportItemsCsv(path: string) {
+  return call<void>("export_items_csv", { path });
+}
+
+export function previewItemsCsvImport(path: string) {
+  return call<ItemsCsvImportPreview>("preview_items_csv_import", { path });
+}
+
+export function applyItemsCsvImport(decision: ItemsCsvImportDecision) {
+  return call<ItemsCsvImportResult>("apply_items_csv_import", { decision });
+}
+
 export function getLowStockPercent() {
   return call<number>("get_low_stock_percent");
 }

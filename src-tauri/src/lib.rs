@@ -1,4 +1,5 @@
 mod commands;
+mod csv_util;
 /// `pub` only so `src/bin/seed_demo.rs` (the demo-database generator, see
 /// `demo/README.md`) can reuse `init_db`/`migrate_db` instead of duplicating
 /// the schema — nothing else outside this crate depends on it.
@@ -62,6 +63,9 @@ pub fn run() {
             commands::items::delete_item,
             commands::items::add_stock_entry,
             commands::items::deactivate_item,
+            commands::items::export_items_csv,
+            commands::items::preview_items_csv_import,
+            commands::items::apply_items_csv_import,
             commands::config::get_low_stock_percent,
             commands::config::set_low_stock_percent,
             commands::config::get_default_profit_margin,

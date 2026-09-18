@@ -65,6 +65,142 @@ pub struct ItemSummary {
     pub active: bool,
 }
 
+/// One row of the items CSV export/import, as it travels over the Tauri IPC
+/// (JSON, camelCase, same convention as every other model here) — **not**
+/// what actually gets written to/read from the `.csv` file itself, which
+/// uses Portuguese headers instead (see `commands::items::ItemCsvFileRow`,
+/// converted to/from this type right at the `csv_util` boundary). Keeping
+/// these separate means a `serde(rename)` chosen for the spreadsheet's
+/// column header can never silently break the JSON contract with the
+/// frontend, which expects plain camelCase like every other command.
+/// `active` travels as `"sim"`/`"nao"` rather than a bool: friendlier to type
+/// by hand in a spreadsheet than `1`/`0`, and `csv`/`serde` has no built-in
+/// support for a custom bool spelling.
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCsvRow {
+    pub code: String,
+    pub name: String,
+    /// Blank = "Categoria indefinida", same convention as `ItemSummary::category_name`.
+    pub category: String,
+    pub cost_price: f64,
+    pub sale_price: f64,
+    pub quantity: i64,
+    pub min_quantity: Option<i64>,
+    pub active: String,
+}
+
+/// One field that differs between the DB's current item and an incoming CSV
+/// row — `field` matches `ItemCsvRow`'s header names ("nome", "preco_custo",
+/// ...) so the frontend can pick the right label/formatter per row.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCsvFieldDiff {
+    pub field: String,
+    pub current: String,
+    pub new: String,
+}
+
+/// A CSV row whose code (or, as fallback, normalized name) matched no
+/// existing item — a candidate to create, unless the admin remaps it to an
+/// existing item on the review screen (see `Plans/PLANO.md`'s "Importação de
+/// CSV — tela de resumo").
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCsvNewRow {
+    pub row_line: usize,
+    pub row: ItemCsvRow,
+    /// Set when the row's name, accent/case-folded, exactly matches an
+    /// existing item's — a possible typo/variation the admin should confirm
+    /// rather than a definite new item. `None` doesn't rule out a manual
+    /// remap; it just means nothing was auto-suggested.
+    pub suggested_item_id: Option<i64>,
+    pub suggested_item_name: Option<String>,
+}
+
+/// A CSV row matched directly by `code` to an existing item, with at least
+/// one field actually different from what's stored (rows with no diff are
+/// left out of the preview entirely — nothing to review).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCsvChangedRow {
+    pub row_line: usize,
+    pub item_id: i64,
+    pub diffs: Vec<ItemCsvFieldDiff>,
+    pub row: ItemCsvRow,
+}
+
+/// An active item that exists in the DB but wasn't matched by any CSV row —
+/// the admin picks what happens to it on the review screen (default "keep").
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCsvMissingItem {
+    pub item_id: i64,
+    pub code: String,
+    pub name: String,
+    pub quantity: i64,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCsvRowError {
+    pub line: usize,
+    pub message: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemsCsvImportPreview {
+    pub new_items: Vec<ItemCsvNewRow>,
+    pub changed_items: Vec<ItemCsvChangedRow>,
+    pub missing_items: Vec<ItemCsvMissingItem>,
+    pub errors: Vec<ItemCsvRowError>,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCsvCreateDecision {
+    pub row: ItemCsvRow,
+}
+
+/// `keep_existing_name` is set when this update came from a "new" row the
+/// admin manually remapped to an existing item — the CSV's name is discarded
+/// and the DB's own name kept, so a typo in the spreadsheet (e.g. "Canet")
+/// can't silently rename the real item ("Caneta"). A direct code match never
+/// sets this — its name *does* follow the CSV, same as any other field.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCsvUpdateDecision {
+    pub item_id: i64,
+    pub row: ItemCsvRow,
+    pub keep_existing_name: bool,
+}
+
+/// `action`: `"keep"` (default, no-op), `"zero"` (set quantity to 0), or
+/// `"deactivate"`.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCsvMissingAction {
+    pub item_id: i64,
+    pub action: String,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemsCsvImportDecision {
+    pub creates: Vec<ItemCsvCreateDecision>,
+    pub updates: Vec<ItemCsvUpdateDecision>,
+    pub missing_actions: Vec<ItemCsvMissingAction>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemsCsvImportResult {
+    pub created: i64,
+    pub updated: i64,
+    pub missing_handled: i64,
+}
+
 /// One line the frontend wants to add to a sale — `commands::sales::create_sale`
 /// never trusts `unit_price`/`item_code`/`item_name` from the caller, it
 /// re-fetches those fresh from `items` (see `docs/database.md`'s `sale_items`).

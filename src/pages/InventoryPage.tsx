@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import { useAuth } from "../context/AuthContext";
 import type { CategorySummary, ItemSummary } from "../lib/api";
-import { deleteItem, getLowStockPercent, listCategories, listItems } from "../lib/api";
+import { deleteItem, exportItemsCsv, getLowStockPercent, listCategories, listItems } from "../lib/api";
 import { Button } from "../components/Button";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { ContextMenu, ContextMenuItem } from "../components/ContextMenu";
+import { ImportCsvModal } from "../components/ImportCsvModal";
 import { ItemFormModal } from "../components/ItemFormModal";
 import { Pagination } from "../components/Pagination";
 import { StockAdjustModal } from "../components/StockAdjustModal";
@@ -28,6 +30,8 @@ export function InventoryPage() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; actions: ContextMenuItem[] } | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[1]);
+  const [importing, setImporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   function reload() {
     listItems()
@@ -74,6 +78,26 @@ export function InventoryPage() {
     }
   }
 
+  async function handleExportCsv() {
+    setExportError(null);
+    const today = new Date().toISOString().slice(0, 10);
+    let path: string | null;
+    try {
+      path = await save({ defaultPath: `estoque-${today}.csv`, filters: [{ name: "CSV", extensions: ["csv"] }] });
+    } catch (err) {
+      logger.error("falha ao abrir seletor de destino do CSV", err);
+      setExportError("Não foi possível abrir o seletor de arquivo.");
+      return;
+    }
+    if (!path) return;
+    try {
+      await exportItemsCsv(path);
+    } catch (err) {
+      logger.error("falha ao exportar CSV de estoque", path, err);
+      setExportError(String(err));
+    }
+  }
+
   if (!user) return null;
 
   function itemActions(item: ItemSummary): ContextMenuItem[] {
@@ -117,11 +141,21 @@ export function InventoryPage() {
         </select>
         <div className="flex-1" />
         {user.isAdmin && (
-          <Button variant="primary" onClick={() => setEditing("new")}>
-            + Novo item
-          </Button>
+          <>
+            <Button variant="secondary" onClick={() => setImporting(true)}>
+              ⭳ Importar CSV
+            </Button>
+            <Button variant="secondary" onClick={handleExportCsv}>
+              ⭱ Exportar CSV
+            </Button>
+            <Button variant="primary" onClick={() => setEditing("new")}>
+              + Novo item
+            </Button>
+          </>
         )}
       </div>
+
+      {exportError && <p className="mb-4 text-xs text-danger">{exportError}</p>}
 
       <div className="overflow-hidden rounded-xl border border-theme-border bg-theme-surface">
         <table className="w-full text-sm">
@@ -259,6 +293,17 @@ export function InventoryPage() {
           y={contextMenu.y}
           items={contextMenu.actions}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {importing && (
+        <ImportCsvModal
+          items={items}
+          onClose={() => setImporting(false)}
+          onImported={() => {
+            setImporting(false);
+            reload();
+          }}
         />
       )}
     </div>

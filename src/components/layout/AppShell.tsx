@@ -22,7 +22,7 @@ function formatCountdown(seconds: number): string {
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", icon: "▦", adminOnly: true, group: () => "Operação" },
   { to: "/venda", label: "Venda", icon: "🛒", adminOnly: false, group: () => "Operação" },
-  { to: "/", label: "Estoque", icon: "📦", adminOnly: false, group: () => "Operação" },
+  { to: "/estoque", label: "Estoque", icon: "📦", adminOnly: false, group: () => "Operação" },
   { to: "/devedores", label: "Devedores", icon: "💳", adminOnly: false, group: () => "Operação" },
   { to: "/historico", label: "Histórico de vendas", icon: "🧾", adminOnly: false, group: () => "Operação" },
   { to: "/usuarios", label: "Usuários", icon: "👤", adminOnly: true, group: () => "Administração" },
@@ -38,7 +38,7 @@ const NAV_ITEMS = [
 /** Título/subtítulo do topbar por rota — mesmo texto do `titles` do mockup,
  * ajustado ao que a tela realmente tem hoje. Some rota nova, some entrada aqui. */
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
-  "/": { title: "Estoque", subtitle: "Itens cadastrados e categorias" },
+  "/estoque": { title: "Estoque", subtitle: "Itens cadastrados e categorias" },
   "/dashboard": { title: "Dashboard", subtitle: "Visão geral do estoque e das vendas" },
   "/venda": { title: "Venda", subtitle: "Registro rápido de venda, otimizado para teclado" },
   "/devedores": { title: "Devedores (Crediário)", subtitle: "Saldo em aberto, histórico de vendas fiado e pagamentos por cliente" },
@@ -110,7 +110,6 @@ export function AppShell() {
                   )}
                   <NavLink
                     to={item.to}
-                    end={item.to === "/"}
                     onClick={(e) => {
                       if (routeDirty && item.to !== pathname) {
                         e.preventDefault();

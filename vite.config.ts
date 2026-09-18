@@ -16,7 +16,11 @@ export default defineConfig(async () => ({
       ? { protocol: "ws", host, port: 1421 }
       : undefined,
     watch: {
-      ignored: ["**/src-tauri/**"],
+      // `docs/**` isn't part of the module graph (nothing imports a .md
+      // file), so Vite falls back to a full page reload on every edit there
+      // instead of a no-op — excluded so editing docs doesn't flicker the
+      // Tauri window while `tauri dev` is running.
+      ignored: ["**/src-tauri/**", "**/docs/**"],
     },
   },
 }));
