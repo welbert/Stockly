@@ -13,23 +13,12 @@ import { Pagination } from "../../components/Pagination";
 import { PAYMENT_METHOD_LABEL, fmt, fmtDate, fmtDateTime, localDateKey } from "../../lib/format";
 import { themeColor } from "../../theme";
 import { logger } from "../../logger";
+import { PeriodToolbar } from "./PeriodToolbar";
+import { addDays, usePeriodFilter } from "./usePeriodFilter";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
-
-type PeriodPreset = "7d" | "month" | "custom";
-
-function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function addDays(dateKey: string, delta: number): string {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  const date = new Date(y, m - 1, d + delta);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
 
 function weekdayShort(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
@@ -55,9 +44,8 @@ function weekdayShort(dateKey: string): string {
 export function VendasPorPeriodoPage() {
   const { user } = useAuth();
   const [sales, setSales] = useState<SaleListItem[]>([]);
-  const [preset, setPreset] = useState<PeriodPreset>("7d");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  const period = usePeriodFilter();
+  const { range, periodLabel } = period;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[1]);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -67,13 +55,6 @@ export function VendasPorPeriodoPage() {
       .then(setSales)
       .catch((err) => logger.error("falha ao listar vendas", err));
   }, []);
-
-  const today = todayKey();
-  const range = useMemo(() => {
-    if (preset === "7d") return { from: addDays(today, -6), to: today };
-    if (preset === "month") return { from: `${today.slice(0, 7)}-01`, to: today };
-    return { from: customFrom || today, to: customTo || today };
-  }, [preset, today, customFrom, customTo]);
 
   const filtered = useMemo(
     () =>
@@ -85,7 +66,7 @@ export function VendasPorPeriodoPage() {
     [sales, range],
   );
 
-  useEffect(() => setPage(0), [preset, customFrom, customTo]);
+  useEffect(() => setPage(0), [period.preset, period.customFrom, period.customTo]);
 
   const totalVendido = filtered.reduce((sum, s) => sum + s.total, 0);
   const numVendas = filtered.length;
@@ -112,7 +93,6 @@ export function VendasPorPeriodoPage() {
   const paginated = filtered.slice(page * pageSize, (page + 1) * pageSize);
   const accent = themeColor("--color-primary", "#4f46e5");
   const peakDayLabel = peakDay && peakDay.total > 0 ? `${weekdayShort(peakDay.date)} · ${fmt(peakDay.total)}` : "—";
-  const periodLabel = `${fmtDate(range.from)} a ${fmtDate(range.to)}`;
 
   async function handleExportCsv() {
     setExportError(null);
@@ -170,47 +150,14 @@ export function VendasPorPeriodoPage() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <select
-          value={preset}
-          onChange={(e) => setPreset(e.target.value as PeriodPreset)}
-          className="rounded-lg border border-theme-border bg-theme-surface px-3 py-2 text-sm text-theme-1 outline-none"
-        >
-          <option value="7d">Últimos 7 dias</option>
-          <option value="month">Este mês</option>
-          <option value="custom">Personalizado...</option>
-        </select>
-        {preset !== "custom" && <span className="text-xs text-theme-3">{periodLabel}</span>}
-        {preset === "custom" && (
-          <>
-            <label className="flex items-center gap-1.5 text-xs text-theme-3">
-              De
-              <input
-                type="date"
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                className="rounded-lg border border-theme-border bg-theme-surface px-2 py-2 text-sm text-theme-1 outline-none"
-              />
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-theme-3">
-              Até
-              <input
-                type="date"
-                value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
-                className="rounded-lg border border-theme-border bg-theme-surface px-2 py-2 text-sm text-theme-1 outline-none"
-              />
-            </label>
-          </>
-        )}
-        <div className="flex-1" />
+      <PeriodToolbar filter={period}>
         <Button variant="secondary" onClick={handleExportCsv}>
           ⭱ Exportar CSV
         </Button>
         <Button variant="secondary" onClick={handleExportPdf}>
           ⭱ Exportar PDF
         </Button>
-      </div>
+      </PeriodToolbar>
 
       {exportError && <p className="mb-4 text-xs text-danger">{exportError}</p>}
 

@@ -7,6 +7,10 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { DevedoresPage } from "./pages/DevedoresPage";
 import { InventoryPage } from "./pages/InventoryPage";
 import { ReportPlaceholderPage } from "./pages/ReportPlaceholderPage";
+import { VendasComparativoPeriodosPage } from "./pages/reports/VendasComparativoPeriodosPage";
+import { VendasPorCategoriaItemPage } from "./pages/reports/VendasPorCategoriaItemPage";
+import { VendasPorFormaPagamentoPage } from "./pages/reports/VendasPorFormaPagamentoPage";
+import { VendasPorOperadorPage } from "./pages/reports/VendasPorOperadorPage";
 import { VendasPorPeriodoPage } from "./pages/reports/VendasPorPeriodoPage";
 import { SalesHistoryPage } from "./pages/SalesHistoryPage";
 import { SalesPage } from "./pages/SalesPage";
@@ -37,6 +41,10 @@ function App() {
                 <Route path="devedores" element={<DevedoresPage />} />
                 <Route path="historico" element={<SalesHistoryPage />} />
                 <Route path="relatorios/vendas-periodo" element={<VendasPorPeriodoPage />} />
+                <Route path="relatorios/vendas-categoria-item" element={<VendasPorCategoriaItemPage />} />
+                <Route path="relatorios/vendas-forma-pagamento" element={<VendasPorFormaPagamentoPage />} />
+                <Route path="relatorios/vendas-operador" element={<VendasPorOperadorPage />} />
+                <Route path="relatorios/comparativo-periodos" element={<VendasComparativoPeriodosPage />} />
                 <Route path="relatorios/:slug" element={<ReportPlaceholderPage />} />
                 <Route path="configuracoes" element={<SettingsPage />} />
                 <Route path="usuarios" element={<UsersPage />} />

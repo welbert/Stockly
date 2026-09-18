@@ -7,5 +7,6 @@ pub mod dashboard_layout;
 pub mod items;
 pub mod logging;
 pub mod receipts;
+pub mod reports;
 pub mod sales;
 pub mod users;

@@ -282,6 +282,26 @@ pub struct SaleListItem {
     pub discount_value: f64,
 }
 
+/// One `sale_items` line, joined with its (current) category — the
+/// line-item-level counterpart of `SaleListItem`, needed for any report that
+/// breaks sales down by category/item instead of just by sale (`list_sales`
+/// has no line items). `category_name`/`item_name` reflect the item's
+/// *current* category/name, not a historical snapshot — same limitation
+/// `commands::dashboard::sales_by_category`/`top_selling_items` already have
+/// (both also `GROUP BY si.item_name`, joining `items`/`categories` live).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SaleItemReportRow {
+    pub sale_id: i64,
+    pub created_at: String,
+    pub status: String,
+    pub item_name: String,
+    /// `None` = "Categoria indefinida", same convention as `ItemSummary::category_name`.
+    pub category_name: Option<String>,
+    pub quantity: i64,
+    pub subtotal: f64,
+}
+
 /// One row of a sales CSV export, as it travels over the Tauri IPC (JSON,
 /// camelCase) — already shaped for display by the frontend (`toSaleCsvRows`
 /// in `src/lib/api.ts`: formatted date, payment method label, "Concluída"/

@@ -393,6 +393,25 @@ export function listSales() {
   return call<SaleListItem[]>("list_sales");
 }
 
+/** One `sale_items` line, joined with its (current) category — the
+ * line-item-level sibling of `SaleListItem`, needed by any report that
+ * breaks sales down by categoria/item instead of just by sale. */
+export type SaleItemReportRow = {
+  saleId: number;
+  createdAt: string;
+  status: string;
+  itemName: string;
+  categoryName: string | null;
+  quantity: number;
+  subtotal: number;
+};
+
+/** Every `sale_items` line ever, newest sale first — same "fetch everything,
+ * filter/aggregate client-side" convention as `listSales`. */
+export function listSaleItemsReport() {
+  return call<SaleItemReportRow[]>("list_sale_items_report");
+}
+
 /** One row of a sales CSV export — already display-formatted (see
  * `toSaleCsvRows`), matching `src-tauri/src/models.rs`'s `SaleCsvRow`. */
 export type SaleCsvRow = {
@@ -420,6 +439,33 @@ export type ReportPdfStat = { label: string; value: string };
  * `src-tauri/src/pdf_util.rs`'s doc comment for why. */
 export function exportSalesReportPdf(path: string, title: string, subtitle: string, stats: ReportPdfStat[], rows: SaleCsvRow[]) {
   return call<void>("export_sales_report_pdf", { path, title, subtitle, stats, rows });
+}
+
+/** Generic table export — for a report whose aggregated shape doesn't match
+ * `SaleCsvRow` (a categoria breakdown, a forma de pagamento breakdown, ...):
+ * `headers`/`rows` are already the exact display strings to write, nothing
+ * for the backend to reshape. `exportSalesCsv` stays the one exception,
+ * since "Vendas por período" already exports full per-sale rows through a
+ * dedicated type. */
+export function exportReportCsv(path: string, headers: string[], rows: string[][]) {
+  return call<void>("export_report_csv", { path, headers, rows });
+}
+
+/** PDF counterpart of `exportReportCsv`, built on the same generic report
+ * layout as `exportSalesReportPdf`. `columnWeights` (same length as
+ * `headers`) is the caller's call — only it knows which columns hold long,
+ * unbreakable content (see `pdf_util.rs`'s doc comment: a word too wide for
+ * its column gets silently dropped, not overflowed). */
+export function exportReportPdf(
+  path: string,
+  title: string,
+  subtitle: string,
+  stats: ReportPdfStat[],
+  headers: string[],
+  columnWeights: number[],
+  rows: string[][],
+) {
+  return call<void>("export_report_pdf", { path, title, subtitle, stats, headers, columnWeights, rows });
 }
 
 /** Shapes already-fetched `SaleListItem`s into the rows `exportSalesCsv`

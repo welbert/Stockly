@@ -350,12 +350,12 @@ Cards candidatos para o catálogo inicial do Stockly (mockup `mockups-ui.html` +
 ### Candidatos a relatório (revisão pós-Dashboard, Crediário, Histórico de vendas e `item_price_history` — cada um já mapeado pra fonte de dado real que existe hoje, não hipotética)
 
 **Vendas**
-- Vendas por período (dia/semana/mês/intervalo customizado) — já previsto na v1.
-- Vendas por categoria / por item — já previsto na v1.
-- Vendas por forma de pagamento — mesmo agregado do Dashboard (`formas_pagamento`), só que filtrável por período arbitrário e exportável, em vez de fixo no mês atual.
-- **Vendas por operador** — quem vendeu o quê, quanto, quantas vendas no período (`sales.user_id`) — útil pra acompanhar desempenho/rotina de cada operador, não só o dono.
-- Comparativo de períodos — mês atual vs. anterior (já no Dashboard como `comparativo_mensal`), mas aqui generalizado pra qualquer par de períodos escolhido, não só o mês corrente.
-- **Ticket médio** por período — não estava em nenhuma versão anterior deste plano; métrica clássica de PDV (total vendido ÷ número de vendas no período), diferente de "Vendas por período" que só soma.
+- Vendas por período (dia/semana/mês/intervalo customizado) — já previsto na v1. **Implementado** (`VendasPorPeriodoPage`, `relatorios/vendas-periodo`) — toolbar de período (Últimos 7 dias/Este mês/Personalizado), 4 cards (total vendido, nº de vendas, ticket médio, dia de pico), gráfico de barras por dia, listagem bruta das vendas do período, Exportar CSV/PDF.
+- Vendas por categoria / por item — já previsto na v1. **Implementado** (`VendasPorCategoriaItemPage`, `relatorios/vendas-categoria-item`) — alterna entre "Por categoria" (donut) e "Por item" (tabela ordenada por quantidade), Exportar CSV/PDF.
+- Vendas por forma de pagamento — mesmo agregado do Dashboard (`formas_pagamento`), só que filtrável por período arbitrário e exportável, em vez de fixo no mês atual. **Implementado** (`VendasPorFormaPagamentoPage`, `relatorios/vendas-forma-pagamento`).
+- **Vendas por operador** — quem vendeu o quê, quanto, quantas vendas no período (`sales.user_id`) — útil pra acompanhar desempenho/rotina de cada operador, não só o dono. **Implementado** (`VendasPorOperadorPage`, `relatorios/vendas-operador`).
+- Comparativo de períodos — mês atual vs. anterior (já no Dashboard como `comparativo_mensal`), mas aqui generalizado pra qualquer par de períodos escolhido, não só o mês corrente. **Implementado** (`VendasComparativoPeriodosPage`, `relatorios/comparativo-periodos`) — adicionado ao menu depois dos outros quatro, fora do escopo original desta leva; dois seletores de mês/ano (só meses com venda) em vez de período livre, já que a comparação é sempre mês contra mês.
+- **Ticket médio** por período — não estava em nenhuma versão anterior deste plano; métrica clássica de PDV (total vendido ÷ número de vendas no período), diferente de "Vendas por período" que só soma. Ainda não tem relatório dedicado próprio, mas já aparece como um dos 4 cards de "Vendas por período" acima.
 - **Descontos concedidos** — quanto foi concedido, por quem foi autorizado, em quais vendas, no período — já dá pra calcular hoje (mesma fórmula do `discountValue` de `list_sales`/Dashboard), só faltava um relatório dedicado com filtro de período/operador.
 - **Vendas canceladas/estornadas** — quantidade, valor total estornado, quem cancelou, quem autorizou, no período — visibilidade que hoje só existe espalhada no Histórico de vendas, útil pra Admin acompanhar se cancelamentos estão dentro do esperado.
 - Margem/lucro (preço de venda − preço de custo) — já previsto na v1, mas com uma decisão em aberto agora que `item_price_history` existe: usar o **custo no momento da venda** (a linha de `item_price_history` mais recente com `created_at <= sales.created_at`) em vez do `items.cost_price` **atual** — senão, um item cujo custo mudou depois de vendido mostraria uma margem histórica errada. `sale_items.unit_price` já é o preço de venda no momento (snapshot); custo precisa do mesmo tratamento pra a conta fechar de verdade.
@@ -375,7 +375,7 @@ Cards candidatos para o catálogo inicial do Stockly (mockup `mockups-ui.html` +
 **Auditoria**
 - **Autorizações de Administrador** — visão unificada de toda ação que precisou de senha de Admin (desconto concedido, venda cancelada, pagamento de Crediário cancelado, cliente renomeado com saldo em aberto) — todas essas já gravam `*_authorized_by_user_id` em suas respectivas tabelas hoje; um relatório assim só precisa juntar o que já existe em 4 tabelas diferentes, não pede coluna nova. Complementa (sem substituir) a ideia de um log de auditoria genérico já registrada em "Ideias extras".
 
-Nenhum item acima está priorizado/comprometido para a v1 além do que já estava (Vendas por período/categoria/item, Margem) — é só o levantamento de candidatos pedido, pra decidir prioridade quando a implementação de Relatórios realmente começar.
+**Status (atualizado após a implementação começar)**: menu lateral expansível implementado (`AppShell`, ver `docs/frontend.md`), com 5 relatórios de Vendas prontos (marcados "Implementado" acima). Os candidatos de Estoque, Crediário/Devedores e Auditoria já aparecem no menu como tela em branco (`ReportPlaceholderPage`), sem dado real ainda. Ticket médio por período, Descontos concedidos, Vendas canceladas/estornadas, Margem/lucro, Estoque valorizado e Previsão de ruptura continuam fora do menu por enquanto — nenhum item além do já marcado "Implementado" está priorizado/comprometido.
 
 ## Configurações
 

@@ -3,12 +3,13 @@
  * (route registration) and `ReportPlaceholderPage` (header/body text), so
  * adding a report is one entry here instead of three places kept in sync by
  * hand. Scope decided with the product owner (`Plans/PLANO.md`'s "Candidatos
- * a relatório"): only these 11 for now — the rest of that list (Comparativo
- * de períodos, Ticket médio, Descontos concedidos, Vendas canceladas,
- * Margem/lucro, Estoque valorizado, Previsão de ruptura) is deliberately
- * left out of the menu until prioritized. Every report here is a blank
- * placeholder screen (`ReportPlaceholderPage`) until Relatórios itself is
- * implemented — this pass is about the navigation, not the data. */
+ * a relatório"): the original 11, plus **Comparativo de períodos** (added
+ * after the fact, on request — considered important enough on its own to
+ * not wait) — the rest of that list (Ticket médio, Descontos concedidos,
+ * Vendas canceladas, Margem/lucro, Estoque valorizado, Previsão de ruptura)
+ * is still deliberately left out of the menu until prioritized. Every
+ * report here is a blank placeholder screen (`ReportPlaceholderPage`) until
+ * it gets its own route/component — most of Vendas already does. */
 export interface ReportDef {
   slug: string;
   label: string;
@@ -30,6 +31,7 @@ export const REPORT_GROUPS: ReportGroupDef[] = [
       { slug: "vendas-categoria-item", label: "Vendas por categoria / item", subtitle: "Distribuição das vendas, por categoria ou por item" },
       { slug: "vendas-forma-pagamento", label: "Vendas por forma de pagamento", subtitle: "Dinheiro, Cartão, PIX e Crediário no período" },
       { slug: "vendas-operador", label: "Vendas por operador", subtitle: "Quem vendeu o quê, quanto, no período" },
+      { slug: "comparativo-periodos", label: "Comparativo de períodos", subtitle: "Um mês contra outro, à sua escolha" },
     ],
   },
   {

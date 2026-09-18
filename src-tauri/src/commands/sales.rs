@@ -1,7 +1,7 @@
 use super::clients::client_balance;
 use crate::csv_util;
 use crate::guard::{active_user_id, resolve_admin_authorization};
-use crate::models::{ReportPdfStatInput, SaleCsvRow, SaleDetail, SaleItemDetail, SaleItemInput, SaleListItem};
+use crate::models::{ReportPdfStatInput, SaleCsvRow, SaleDetail, SaleItemDetail, SaleItemInput, SaleItemReportRow, SaleListItem};
 use crate::money::{fmt_money, round2};
 use crate::pdf_util::{self, fmt_discount, ReportPdfStat, ReportPdfTable};
 use crate::AppState;
@@ -255,6 +255,42 @@ pub fn list_sales(state: State<AppState>) -> Result<Vec<SaleListItem>, String> {
                 total: row.get(6)?,
                 status: row.get(7)?,
                 discount_value: round2(row.get(8)?),
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Every `sale_items` line ever, newest sale first — the line-item-level
+/// sibling of `list_sales` (any logged-in profile, same "fetch everything,
+/// filter/aggregate client-side" convention), needed by any report that
+/// breaks sales down by categoria/item (`Vendas por categoria / item`) since
+/// `list_sales` only carries each sale's total. Same joins as
+/// `commands::dashboard::sales_by_category`/`top_selling_items`.
+#[tauri::command]
+pub fn list_sale_items_report(state: State<AppState>) -> Result<Vec<SaleItemReportRow>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    active_user_id(&state)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT si.sale_id, s.created_at, s.status, si.item_name, c.name, si.quantity, si.subtotal
+             FROM sale_items si
+             JOIN sales s ON s.id = si.sale_id
+             LEFT JOIN items i ON i.id = si.item_id
+             LEFT JOIN categories c ON c.id = i.category_id
+             ORDER BY s.created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(SaleItemReportRow {
+                sale_id: row.get(0)?,
+                created_at: row.get(1)?,
+                status: row.get(2)?,
+                item_name: row.get(3)?,
+                category_name: row.get(4)?,
+                quantity: row.get(5)?,
+                subtotal: row.get(6)?,
             })
         })
         .map_err(|e| e.to_string())?;
