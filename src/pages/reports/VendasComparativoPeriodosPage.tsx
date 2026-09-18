@@ -3,9 +3,10 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import type { SaleListItem } from "../../lib/api";
-import { exportReportCsv, exportReportPdf, listSales } from "../../lib/api";
+import { exportReportCsv, exportReportPdf, listSales, openContainingFolder } from "../../lib/api";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
+import { useToast } from "../../context/ToastContext";
 import { fmt, localDateKey } from "../../lib/format";
 import { logger } from "../../logger";
 
@@ -80,10 +81,10 @@ const REPORT_COLUMN_WEIGHTS = [3, 3, 3, 3];
  * zero-shaped result from. */
 export function VendasComparativoPeriodosPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [sales, setSales] = useState<SaleListItem[]>([]);
   const [monthA, setMonthA] = useState("");
   const [monthB, setMonthB] = useState("");
-  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     listSales()
@@ -121,32 +122,36 @@ export function VendasComparativoPeriodosPage() {
   }
 
   async function handleExportCsv() {
-    setExportError(null);
     let path: string | null;
     try {
       path = await save({ defaultPath: `comparativo-${monthA}-vs-${monthB}.csv`, filters: [{ name: "CSV", extensions: ["csv"] }] });
     } catch (err) {
       logger.error("falha ao abrir seletor de destino do CSV", err);
-      setExportError("Não foi possível abrir o seletor de arquivo.");
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de arquivo" });
       return;
     }
     if (!path) return;
     try {
       await exportReportCsv(path, reportHeaders, reportRows());
+      showToast({
+        type: "success",
+        title: "CSV de Comparativo de períodos gerado",
+        message: "Clique aqui para abrir a pasta",
+        onClick: () => openContainingFolder(path!),
+      });
     } catch (err) {
       logger.error("falha ao exportar CSV de comparativo de períodos", path, err);
-      setExportError(String(err));
+      showToast({ type: "error", title: "Falha ao exportar CSV de Comparativo de períodos", message: String(err) });
     }
   }
 
   async function handleExportPdf() {
-    setExportError(null);
     let path: string | null;
     try {
       path = await save({ defaultPath: `comparativo-${monthA}-vs-${monthB}.pdf`, filters: [{ name: "PDF", extensions: ["pdf"] }] });
     } catch (err) {
       logger.error("falha ao abrir seletor de destino do PDF", err);
-      setExportError("Não foi possível abrir o seletor de arquivo.");
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de arquivo" });
       return;
     }
     if (!path) return;
@@ -160,9 +165,15 @@ export function VendasComparativoPeriodosPage() {
         REPORT_COLUMN_WEIGHTS,
         reportRows(),
       );
+      showToast({
+        type: "success",
+        title: "PDF de Comparativo de períodos gerado",
+        message: "Clique aqui para abrir a pasta",
+        onClick: () => openContainingFolder(path!),
+      });
     } catch (err) {
       logger.error("falha ao exportar PDF de comparativo de períodos", path, err);
-      setExportError(String(err));
+      showToast({ type: "error", title: "Falha ao exportar PDF de Comparativo de períodos", message: String(err) });
     }
   }
 
@@ -207,8 +218,6 @@ export function VendasComparativoPeriodosPage() {
           ⭱ Exportar PDF
         </Button>
       </div>
-
-      {exportError && <p className="mb-4 text-xs text-danger">{exportError}</p>}
 
       <div className="mb-4 grid grid-cols-2 gap-4">
         <Card>

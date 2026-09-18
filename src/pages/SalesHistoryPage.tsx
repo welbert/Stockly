@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useAuth } from "../context/AuthContext";
 import type { SaleListItem, UserSummary } from "../lib/api";
-import { exportSalesCsv, listAdmins, listSales, openReceiptFile, printFile, regenerateReceiptPdf, toSaleCsvRows } from "../lib/api";
+import { exportSalesCsv, listAdmins, listSales, openContainingFolder, openReceiptFile, printFile, regenerateReceiptPdf, toSaleCsvRows } from "../lib/api";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { ContextMenu, ContextMenuItem } from "../components/ContextMenu";
 import { Pagination } from "../components/Pagination";
 import { SaleDetailModal } from "../components/SaleDetailModal";
+import { useToast } from "../context/ToastContext";
 import { PAYMENT_METHOD_LABEL, fmt, fmtDateTime, localDateKey, normalize } from "../lib/format";
 import { logger } from "../logger";
 
@@ -15,6 +16,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 export function SalesHistoryPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [sales, setSales] = useState<SaleListItem[]>([]);
   const [admins, setAdmins] = useState<UserSummary[]>([]);
   const [search, setSearch] = useState("");
@@ -24,7 +26,6 @@ export function SalesHistoryPage() {
   const [paymentFilter, setPaymentFilter] = useState("");
   const [viewingSaleId, setViewingSaleId] = useState<number | null>(null);
   const [actionMenu, setActionMenu] = useState<{ x: number; y: number; actions: ContextMenuItem[] } | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[1]);
 
@@ -33,24 +34,22 @@ export function SalesHistoryPage() {
   // the file is cheap to re-render and may not exist yet (creation failed
   // right after the sale, or the "recibos" folder was cleared).
   async function handlePrintReceipt(sale: SaleListItem) {
-    setActionError(null);
     try {
       const path = await regenerateReceiptPdf(sale.id);
       await printFile(path);
     } catch (err) {
       logger.error("falha ao imprimir recibo", sale.id, err);
-      setActionError("Não foi possível imprimir o recibo.");
+      showToast({ type: "error", title: "Não foi possível imprimir o recibo" });
     }
   }
 
   async function handleOpenReceiptPdf(sale: SaleListItem) {
-    setActionError(null);
     try {
       const path = await regenerateReceiptPdf(sale.id);
       await openReceiptFile(path);
     } catch (err) {
       logger.error("falha ao abrir PDF do recibo", sale.id, err);
-      setActionError("Não foi possível abrir o PDF do recibo.");
+      showToast({ type: "error", title: "Não foi possível abrir o PDF do recibo" });
     }
   }
 
@@ -94,21 +93,26 @@ export function SalesHistoryPage() {
   // from), not just the visible page — same rationale as `toSaleCsvRows`'s
   // doc comment, shared with `VendasPorPeriodoPage`'s own export button.
   async function handleExportCsv() {
-    setActionError(null);
     let path: string | null;
     try {
       path = await save({ defaultPath: "historico-de-vendas.csv", filters: [{ name: "CSV", extensions: ["csv"] }] });
     } catch (err) {
       logger.error("falha ao abrir seletor de destino do CSV", err);
-      setActionError("Não foi possível abrir o seletor de arquivo.");
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de arquivo" });
       return;
     }
     if (!path) return;
     try {
       await exportSalesCsv(path, toSaleCsvRows(filtered));
+      showToast({
+        type: "success",
+        title: "CSV de Histórico de vendas gerado",
+        message: "Clique aqui para abrir a pasta",
+        onClick: () => openContainingFolder(path!),
+      });
     } catch (err) {
       logger.error("falha ao exportar CSV do histórico de vendas", path, err);
-      setActionError(String(err));
+      showToast({ type: "error", title: "Falha ao exportar CSV de Histórico de vendas", message: String(err) });
     }
   }
 
@@ -167,8 +171,6 @@ export function SalesHistoryPage() {
           ⭱ Exportar CSV
         </Button>
       </div>
-
-      {actionError && <p className="mb-3 text-xs text-danger">{actionError}</p>}
 
       <Card>
         <div className="-m-5 overflow-hidden">

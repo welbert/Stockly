@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ItemSummary, ItemsCsvImportDecision, ItemsCsvImportPreview, ItemsCsvImportResult, MissingItemAction } from "../lib/api";
 import { applyItemsCsvImport, previewItemsCsvImport } from "../lib/api";
-import { fmt, normalize } from "../lib/format";
+import { fmt } from "../lib/format";
+import { ITEM_SEARCH_PEEK_LIMIT, itemSearchSuggestions } from "../lib/itemSearch";
 import { logger } from "../logger";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
@@ -32,28 +33,6 @@ const MISSING_ACTION_LABEL: Record<MissingItemAction, string> = {
   zero: "Zerar quantidade",
   deactivate: "Desativar",
 };
-
-const REMAP_SUGGESTION_LIMIT_EMPTY = 3;
-const REMAP_SUGGESTION_LIMIT_SEARCH = 8;
-
-/** Same "starts with" > "contains" ranking as `SalesPage`'s item search
- * (`normalize()` for accent/case-insensitive match), capped so the dropdown
- * stays usable with a large catalog. With an empty query, just a 3-item peek
- * (see `RemapComboBox`) — not real search results, only there so the admin
- * knows what the field shows and how to search it. */
-function remapSuggestionsFor(query: string, items: ItemSummary[]): ItemSummary[] {
-  const term = normalize(query.trim());
-  if (!term) return items.slice(0, REMAP_SUGGESTION_LIMIT_EMPTY);
-  const starts: ItemSummary[] = [];
-  const contains: ItemSummary[] = [];
-  for (const item of items) {
-    const name = normalize(item.name);
-    const code = normalize(item.code);
-    if (name.startsWith(term) || code.startsWith(term)) starts.push(item);
-    else if (name.includes(term) || code.includes(term)) contains.push(item);
-  }
-  return [...starts, ...contains].slice(0, REMAP_SUGGESTION_LIMIT_SEARCH);
-}
 
 interface RemapComboBoxProps {
   items: ItemSummary[];
@@ -94,7 +73,7 @@ function RemapComboBox({ items, value, onChange }: RemapComboBoxProps) {
     );
   }
 
-  const suggestions = remapSuggestionsFor(query, items);
+  const suggestions = itemSearchSuggestions(query, items);
 
   function select(item: ItemSummary) {
     onChange(item.id);
@@ -134,7 +113,7 @@ function RemapComboBox({ items, value, onChange }: RemapComboBoxProps) {
         <div className="absolute right-0 z-10 mt-1 w-64 overflow-hidden rounded-lg border border-theme-border bg-theme-surface shadow-lg">
           {!query.trim() && (
             <p className="border-b border-theme-border px-3 py-1.5 text-[11px] text-theme-3">
-              Digite código ou nome pra buscar — mostrando os {REMAP_SUGGESTION_LIMIT_EMPTY} primeiros
+              Digite código ou nome pra buscar — mostrando os {ITEM_SEARCH_PEEK_LIMIT} primeiros
             </p>
           )}
           <div className="max-h-56 overflow-y-auto">

@@ -1,8 +1,8 @@
 use crate::csv_util;
 use crate::guard::{active_user_id, require_admin};
 use crate::models::{
-    ItemCsvChangedRow, ItemCsvFieldDiff, ItemCsvMissingItem, ItemCsvNewRow, ItemCsvRow, ItemCsvRowError, ItemSummary,
-    ItemsCsvImportDecision, ItemsCsvImportPreview, ItemsCsvImportResult,
+    ItemCsvChangedRow, ItemCsvFieldDiff, ItemCsvMissingItem, ItemCsvNewRow, ItemCsvRow, ItemCsvRowError, ItemPriceHistoryRow,
+    ItemSummary, ItemsCsvImportDecision, ItemsCsvImportPreview, ItemsCsvImportResult, StockMovementRow,
 };
 use crate::money::round2;
 use crate::AppState;
@@ -107,6 +107,75 @@ pub fn list_items(state: State<AppState>) -> Result<Vec<ItemSummary>, String> {
         .prepare(&format!("SELECT {ITEM_COLUMNS} FROM items i LEFT JOIN categories c ON c.id = i.category_id ORDER BY i.name"))
         .map_err(|e| e.to_string())?;
     let rows = stmt.query_map([], map_item).map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Every `stock_movements` row ever, newest first — the "Movimentação de
+/// estoque" report's data source (and, filtered to `movement_type = 'sale'`
+/// client-side, "Itens sem movimento"'s too). Same "fetch everything,
+/// filter/aggregate client-side" convention as `list_sales`. `item_id`'s
+/// `ON DELETE CASCADE` means this join is always valid — a deleted item
+/// takes its movement rows with it, never leaving an orphan to `LEFT JOIN`
+/// around.
+#[tauri::command]
+pub fn list_stock_movements(state: State<AppState>) -> Result<Vec<StockMovementRow>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    active_user_id(&state)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT sm.id, sm.item_id, i.name, sm.movement_type, sm.quantity_delta, u.name, sm.created_at
+             FROM stock_movements sm
+             JOIN items i ON i.id = sm.item_id
+             JOIN users u ON u.id = sm.user_id
+             ORDER BY sm.created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(StockMovementRow {
+                id: row.get(0)?,
+                item_id: row.get(1)?,
+                item_name: row.get(2)?,
+                movement_type: row.get(3)?,
+                quantity_delta: row.get(4)?,
+                user_name: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Every `item_price_history` row ever, newest first — the "Histórico de
+/// alteração de preço" report's data source. Same reasoning as
+/// `list_stock_movements` (cascade-deleted alongside its item, so the join
+/// never orphans).
+#[tauri::command]
+pub fn list_item_price_history(state: State<AppState>) -> Result<Vec<ItemPriceHistoryRow>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    active_user_id(&state)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT iph.id, iph.item_id, i.name, iph.cost_price, iph.sale_price, u.name, iph.created_at
+             FROM item_price_history iph
+             JOIN items i ON i.id = iph.item_id
+             JOIN users u ON u.id = iph.user_id
+             ORDER BY iph.created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ItemPriceHistoryRow {
+                id: row.get(0)?,
+                item_id: row.get(1)?,
+                item_name: row.get(2)?,
+                cost_price: row.get(3)?,
+                sale_price: row.get(4)?,
+                user_name: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 

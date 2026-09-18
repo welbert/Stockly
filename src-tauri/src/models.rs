@@ -65,6 +65,41 @@ pub struct ItemSummary {
     pub active: bool,
 }
 
+/// One `stock_movements` ledger row, joined with its item/user names — the
+/// "consulta" screen `docs/database.md` registered as pending back when the
+/// table was created (`Plans/PLANO.md`'s "Histórico de movimentações de
+/// estoque"). `itemId` (not just `itemName`) travels too so a report can
+/// group by item reliably (`VendasPorCategoriaItemPage`'s `SaleItemReportRow`
+/// groups by name instead only because `sale_items` snapshots the name and
+/// has no `item_id` guarantee across a deleted item — this table always has
+/// a live `item_id`, cascade-deleted alongside the item itself).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct StockMovementRow {
+    pub id: i64,
+    pub item_id: i64,
+    pub item_name: String,
+    pub movement_type: String,
+    pub quantity_delta: i64,
+    pub user_name: String,
+    pub created_at: String,
+}
+
+/// One `item_price_history` row, joined with its item/user names — same
+/// "fetch everything" ledger query as `StockMovementRow`, for the "Histórico
+/// de alteração de preço" report.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemPriceHistoryRow {
+    pub id: i64,
+    pub item_id: i64,
+    pub item_name: String,
+    pub cost_price: f64,
+    pub sale_price: f64,
+    pub user_name: String,
+    pub created_at: String,
+}
+
 /// One row of the items CSV export/import, as it travels over the Tauri IPC
 /// (JSON, camelCase, same convention as every other model here) — **not**
 /// what actually gets written to/read from the `.csv` file itself, which

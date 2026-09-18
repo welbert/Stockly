@@ -21,6 +21,7 @@ import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Checkbox } from "../components/Checkbox";
 import { ThemeSwitcher } from "../components/ThemeSwitcher";
+import { useToast } from "../context/ToastContext";
 import { logger } from "../logger";
 
 const AUTO_LOCK_OPTIONS: { value: number; label: string }[] = [
@@ -35,14 +36,13 @@ const AUTO_LOCK_OPTIONS: { value: number; label: string }[] = [
 
 export function SettingsPage() {
   const { user, setUser } = useAuth();
+  const { showToast } = useToast();
   const [lowStockPercent, setLowStockPercentState] = useState<number | null>(null);
   const [profitMargin, setProfitMarginState] = useState<number | null>(null);
   const [storeName, setStoreNameState] = useState<string | null>(null);
   const [storeInfo, setStoreInfoState] = useState<string | null>(null);
   const [thankYouMessage, setThankYouMessageState] = useState<string | null>(null);
   const [creditEnabled, setCreditEnabledState] = useState<boolean | null>(null);
-  const [creditError, setCreditError] = useState<string | null>(null);
-  const [logDirError, setLogDirError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.isAdmin) {
@@ -124,23 +124,21 @@ export function SettingsPage() {
   }
 
   async function handleOpenLogDir() {
-    setLogDirError(null);
     try {
       await openLogDir();
     } catch (err) {
       logger.error("falha ao abrir pasta de logs", err);
-      setLogDirError(String(err));
+      showToast({ type: "error", title: "Não foi possível abrir a pasta de logs", message: String(err) });
     }
   }
 
   async function handleCreditEnabledChange(value: boolean) {
-    setCreditError(null);
     try {
       await setCreditEnabled(value);
       setCreditEnabledState(value);
     } catch (err) {
       logger.error("falha ao alterar disponibilidade do Crediário", err);
-      setCreditError(String(err));
+      showToast({ type: "error", title: "Não foi possível alterar a disponibilidade do Crediário", message: String(err) });
     }
   }
 
@@ -174,7 +172,6 @@ export function SettingsPage() {
         <Button variant="secondary" onClick={handleOpenLogDir}>
           Abrir pasta de logs
         </Button>
-        {logDirError && <p className="mt-2 text-xs text-danger">{logDirError}</p>}
         <p className="mt-2.5 text-xs text-theme-3">
           Caso o app apresente algum problema, os arquivos de log ficam aqui — encaminhe pra investigação.
         </p>
@@ -224,7 +221,6 @@ export function SettingsPage() {
       {user.isAdmin && creditEnabled !== null && (
         <Card title="Crediário">
           <Checkbox label="Aceitar Crediário como forma de pagamento" checked={creditEnabled} onChange={handleCreditEnabledChange} />
-          {creditError && <p className="mt-2 text-xs text-danger">{creditError}</p>}
           <p className="mt-2.5 text-xs text-theme-3">
             Só pode ser desativado se não houver nenhum devedor com saldo em aberto (tela Devedores).
           </p>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useAuth } from "../context/AuthContext";
 import type { CategorySummary, ItemSummary } from "../lib/api";
-import { deleteItem, exportItemsCsv, getLowStockPercent, listCategories, listItems } from "../lib/api";
+import { deleteItem, exportItemsCsv, getLowStockPercent, listCategories, listItems, openContainingFolder } from "../lib/api";
 import { Button } from "../components/Button";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { ContextMenu, ContextMenuItem } from "../components/ContextMenu";
@@ -11,6 +11,7 @@ import { ItemFormModal } from "../components/ItemFormModal";
 import { Pagination } from "../components/Pagination";
 import { StockAdjustModal } from "../components/StockAdjustModal";
 import { StockBadge } from "../components/StockBadge";
+import { useToast } from "../context/ToastContext";
 import { fmt, normalize } from "../lib/format";
 import { logger } from "../logger";
 
@@ -18,6 +19,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 export function InventoryPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [items, setItems] = useState<ItemSummary[]>([]);
   const [categories, setCategories] = useState<CategorySummary[]>([]);
   const [lowStockPercent, setLowStockPercent] = useState(20);
@@ -31,7 +33,6 @@ export function InventoryPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[1]);
   const [importing, setImporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
 
   function reload() {
     listItems()
@@ -79,22 +80,27 @@ export function InventoryPage() {
   }
 
   async function handleExportCsv() {
-    setExportError(null);
     const today = new Date().toISOString().slice(0, 10);
     let path: string | null;
     try {
       path = await save({ defaultPath: `estoque-${today}.csv`, filters: [{ name: "CSV", extensions: ["csv"] }] });
     } catch (err) {
       logger.error("falha ao abrir seletor de destino do CSV", err);
-      setExportError("Não foi possível abrir o seletor de arquivo.");
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de arquivo" });
       return;
     }
     if (!path) return;
     try {
       await exportItemsCsv(path);
+      showToast({
+        type: "success",
+        title: "CSV de Estoque gerado",
+        message: "Clique aqui para abrir a pasta",
+        onClick: () => openContainingFolder(path!),
+      });
     } catch (err) {
       logger.error("falha ao exportar CSV de estoque", path, err);
-      setExportError(String(err));
+      showToast({ type: "error", title: "Falha ao exportar CSV de Estoque", message: String(err) });
     }
   }
 
@@ -154,8 +160,6 @@ export function InventoryPage() {
           </>
         )}
       </div>
-
-      {exportError && <p className="mb-4 text-xs text-danger">{exportError}</p>}
 
       <div className="overflow-hidden rounded-xl border border-theme-border bg-theme-surface">
         <table className="w-full text-sm">

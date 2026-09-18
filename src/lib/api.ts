@@ -149,6 +149,39 @@ export function listItems() {
   return call<ItemSummary[]>("list_items");
 }
 
+/** One `stock_movements` ledger row — the "Movimentação de estoque" report's
+ * data source (and "Itens sem movimento"'s too, filtered to `movementType
+ * === "sale"` client-side). */
+export type StockMovementRow = {
+  id: number;
+  itemId: number;
+  itemName: string;
+  movementType: string;
+  quantityDelta: number;
+  userName: string;
+  createdAt: string;
+};
+
+export function listStockMovements() {
+  return call<StockMovementRow[]>("list_stock_movements");
+}
+
+/** One `item_price_history` row — the "Histórico de alteração de preço"
+ * report's data source. */
+export type ItemPriceHistoryRow = {
+  id: number;
+  itemId: number;
+  itemName: string;
+  costPrice: number;
+  salePrice: number;
+  userName: string;
+  createdAt: string;
+};
+
+export function listItemPriceHistory() {
+  return call<ItemPriceHistoryRow[]>("list_item_price_history");
+}
+
 export function createItem(input: {
   /** Vazio/em branco = backend usa o próprio id do item como código. */
   code: string;
@@ -466,6 +499,13 @@ export function exportReportPdf(
   rows: string[][],
 ) {
   return call<void>("export_report_pdf", { path, title, subtitle, stats, headers, columnWeights, rows });
+}
+
+/** Opens the OS file explorer at the parent directory of `path` — the
+ * "Clique aqui para abrir a pasta" action on every export success toast
+ * (`useToast`). Works for any exported file, CSV or PDF, report or not. */
+export function openContainingFolder(path: string) {
+  return call<void>("open_containing_folder", { path });
 }
 
 /** Shapes already-fetched `SaleListItem`s into the rows `exportSalesCsv`

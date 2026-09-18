@@ -5,9 +5,10 @@ import { Doughnut } from "react-chartjs-2";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import type { SaleItemReportRow } from "../../lib/api";
-import { exportReportCsv, exportReportPdf, listSaleItemsReport } from "../../lib/api";
+import { exportReportCsv, exportReportPdf, listSaleItemsReport, openContainingFolder } from "../../lib/api";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
+import { useToast } from "../../context/ToastContext";
 import { fmt, localDateKey } from "../../lib/format";
 import { logger } from "../../logger";
 import { themeColor } from "../../theme";
@@ -46,11 +47,11 @@ const ITEM_COLUMN_WEIGHTS = [5, 4, 3, 3];
  * see its own doc comment in `src-tauri/src/commands/sales.rs`. */
 export function VendasPorCategoriaItemPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [rows, setRows] = useState<SaleItemReportRow[]>([]);
   const [variant, setVariant] = useState<Variant>("categoria");
   const period = usePeriodFilter();
   const { range, periodLabel } = period;
-  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     listSaleItemsReport()
@@ -111,7 +112,6 @@ export function VendasPorCategoriaItemPage() {
   }
 
   async function handleExportCsv() {
-    setExportError(null);
     const suffix = variant === "categoria" ? "categoria" : "item";
     let path: string | null;
     try {
@@ -121,20 +121,25 @@ export function VendasPorCategoriaItemPage() {
       });
     } catch (err) {
       logger.error("falha ao abrir seletor de destino do CSV", err);
-      setExportError("Não foi possível abrir o seletor de arquivo.");
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de arquivo" });
       return;
     }
     if (!path) return;
     try {
       await exportReportCsv(path, reportHeaders(), reportRows());
+      showToast({
+        type: "success",
+        title: `CSV de Vendas por ${suffix} gerado`,
+        message: "Clique aqui para abrir a pasta",
+        onClick: () => openContainingFolder(path!),
+      });
     } catch (err) {
       logger.error("falha ao exportar CSV de vendas por categoria/item", path, err);
-      setExportError(String(err));
+      showToast({ type: "error", title: `Falha ao exportar CSV de Vendas por ${suffix}`, message: String(err) });
     }
   }
 
   async function handleExportPdf() {
-    setExportError(null);
     const suffix = variant === "categoria" ? "categoria" : "item";
     let path: string | null;
     try {
@@ -144,7 +149,7 @@ export function VendasPorCategoriaItemPage() {
       });
     } catch (err) {
       logger.error("falha ao abrir seletor de destino do PDF", err);
-      setExportError("Não foi possível abrir o seletor de arquivo.");
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de arquivo" });
       return;
     }
     if (!path) return;
@@ -158,9 +163,15 @@ export function VendasPorCategoriaItemPage() {
         reportColumnWeights(),
         reportRows(),
       );
+      showToast({
+        type: "success",
+        title: `PDF de Vendas por ${suffix} gerado`,
+        message: "Clique aqui para abrir a pasta",
+        onClick: () => openContainingFolder(path!),
+      });
     } catch (err) {
       logger.error("falha ao exportar PDF de vendas por categoria/item", path, err);
-      setExportError(String(err));
+      showToast({ type: "error", title: `Falha ao exportar PDF de Vendas por ${suffix}`, message: String(err) });
     }
   }
 
@@ -192,8 +203,6 @@ export function VendasPorCategoriaItemPage() {
           ⭱ Exportar PDF
         </Button>
       </PeriodToolbar>
-
-      {exportError && <p className="mb-4 text-xs text-danger">{exportError}</p>}
 
       {variant === "categoria" ? (
         <Card title="Vendas por categoria" hint={periodLabel}>

@@ -43,3 +43,19 @@ pub fn export_report_pdf(
     let table = ReportPdfTable { headers, column_weights, rows };
     pdf_util::write_report_pdf(Path::new(&path), &title, &subtitle, &pdf_stats, &table)
 }
+
+/// Opens the OS file explorer at the parent directory of `path` — the
+/// "Clique aqui para abrir a pasta" action on every export success toast
+/// (`useToast`, `src/context/ToastContext.tsx`). Lives here (not its own
+/// module) despite not being report-specific: it's the same "generic export
+/// helper" shape as the two commands above, just triggered from Estoque's
+/// CSV export too, not only Relatórios. Unlike `commands::receipts::
+/// open_receipts_folder` (always the same fixed `recibos/` dir), `path` is
+/// wherever the frontend's own save dialog put the file.
+#[tauri::command]
+pub fn open_containing_folder(app: tauri::AppHandle, state: State<AppState>, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    active_user_id(&state)?;
+    let parent = Path::new(&path).parent().ok_or_else(|| "Caminho inválido".to_string())?;
+    app.opener().open_path(parent.to_string_lossy(), None::<String>).map_err(|e| e.to_string())
+}

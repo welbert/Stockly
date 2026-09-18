@@ -5,11 +5,12 @@ import { Bar } from "react-chartjs-2";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import type { SaleListItem } from "../../lib/api";
-import { exportSalesCsv, exportSalesReportPdf, listSales, toSaleCsvRows } from "../../lib/api";
+import { exportSalesCsv, exportSalesReportPdf, listSales, openContainingFolder, toSaleCsvRows } from "../../lib/api";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { InfoTooltip } from "../../components/InfoTooltip";
 import { Pagination } from "../../components/Pagination";
+import { useToast } from "../../context/ToastContext";
 import { PAYMENT_METHOD_LABEL, fmt, fmtDate, fmtDateTime, localDateKey } from "../../lib/format";
 import { themeColor } from "../../theme";
 import { logger } from "../../logger";
@@ -43,12 +44,12 @@ function weekdayShort(dateKey: string): string {
  * the totals shown above them. */
 export function VendasPorPeriodoPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [sales, setSales] = useState<SaleListItem[]>([]);
   const period = usePeriodFilter();
   const { range, periodLabel } = period;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[1]);
-  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     listSales()
@@ -95,32 +96,36 @@ export function VendasPorPeriodoPage() {
   const peakDayLabel = peakDay && peakDay.total > 0 ? `${weekdayShort(peakDay.date)} · ${fmt(peakDay.total)}` : "—";
 
   async function handleExportCsv() {
-    setExportError(null);
     let path: string | null;
     try {
       path = await save({ defaultPath: `vendas-${range.from}-a-${range.to}.csv`, filters: [{ name: "CSV", extensions: ["csv"] }] });
     } catch (err) {
       logger.error("falha ao abrir seletor de destino do CSV", err);
-      setExportError("Não foi possível abrir o seletor de arquivo.");
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de arquivo" });
       return;
     }
     if (!path) return;
     try {
       await exportSalesCsv(path, toSaleCsvRows(filtered));
+      showToast({
+        type: "success",
+        title: "CSV de Vendas por período gerado",
+        message: "Clique aqui para abrir a pasta",
+        onClick: () => openContainingFolder(path!),
+      });
     } catch (err) {
       logger.error("falha ao exportar CSV de vendas por período", path, err);
-      setExportError(String(err));
+      showToast({ type: "error", title: "Falha ao exportar CSV de Vendas por período", message: String(err) });
     }
   }
 
   async function handleExportPdf() {
-    setExportError(null);
     let path: string | null;
     try {
       path = await save({ defaultPath: `vendas-${range.from}-a-${range.to}.pdf`, filters: [{ name: "PDF", extensions: ["pdf"] }] });
     } catch (err) {
       logger.error("falha ao abrir seletor de destino do PDF", err);
-      setExportError("Não foi possível abrir o seletor de arquivo.");
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de arquivo" });
       return;
     }
     if (!path) return;
@@ -139,9 +144,15 @@ export function VendasPorPeriodoPage() {
         ],
         toSaleCsvRows(filtered),
       );
+      showToast({
+        type: "success",
+        title: "PDF de Vendas por período gerado",
+        message: "Clique aqui para abrir a pasta",
+        onClick: () => openContainingFolder(path!),
+      });
     } catch (err) {
       logger.error("falha ao exportar PDF de vendas por período", path, err);
-      setExportError(String(err));
+      showToast({ type: "error", title: "Falha ao exportar PDF de Vendas por período", message: String(err) });
     }
   }
 
@@ -158,8 +169,6 @@ export function VendasPorPeriodoPage() {
           ⭱ Exportar PDF
         </Button>
       </PeriodToolbar>
-
-      {exportError && <p className="mb-4 text-xs text-danger">{exportError}</p>}
 
       <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card>

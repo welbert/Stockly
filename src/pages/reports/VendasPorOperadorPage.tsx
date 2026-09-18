@@ -3,9 +3,10 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import type { SaleListItem } from "../../lib/api";
-import { exportReportCsv, exportReportPdf, listSales } from "../../lib/api";
+import { exportReportCsv, exportReportPdf, listSales, openContainingFolder } from "../../lib/api";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
+import { useToast } from "../../context/ToastContext";
 import { fmt, localDateKey } from "../../lib/format";
 import { logger } from "../../logger";
 import { PeriodToolbar } from "./PeriodToolbar";
@@ -24,10 +25,10 @@ const REPORT_COLUMN_WEIGHTS = [4, 2, 3, 3];
  * this row shape (one per operador, not one per venda) isn't `SaleCsvRow`. */
 export function VendasPorOperadorPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [sales, setSales] = useState<SaleListItem[]>([]);
   const period = usePeriodFilter();
   const { range, periodLabel } = period;
-  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     listSales()
@@ -63,7 +64,6 @@ export function VendasPorOperadorPage() {
   }
 
   async function handleExportCsv() {
-    setExportError(null);
     let path: string | null;
     try {
       path = await save({
@@ -72,20 +72,25 @@ export function VendasPorOperadorPage() {
       });
     } catch (err) {
       logger.error("falha ao abrir seletor de destino do CSV", err);
-      setExportError("Não foi possível abrir o seletor de arquivo.");
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de arquivo" });
       return;
     }
     if (!path) return;
     try {
       await exportReportCsv(path, REPORT_HEADERS, reportRows());
+      showToast({
+        type: "success",
+        title: "CSV de Vendas por operador gerado",
+        message: "Clique aqui para abrir a pasta",
+        onClick: () => openContainingFolder(path!),
+      });
     } catch (err) {
       logger.error("falha ao exportar CSV de vendas por operador", path, err);
-      setExportError(String(err));
+      showToast({ type: "error", title: "Falha ao exportar CSV de Vendas por operador", message: String(err) });
     }
   }
 
   async function handleExportPdf() {
-    setExportError(null);
     let path: string | null;
     try {
       path = await save({
@@ -94,15 +99,21 @@ export function VendasPorOperadorPage() {
       });
     } catch (err) {
       logger.error("falha ao abrir seletor de destino do PDF", err);
-      setExportError("Não foi possível abrir o seletor de arquivo.");
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de arquivo" });
       return;
     }
     if (!path) return;
     try {
       await exportReportPdf(path, "Vendas por operador", periodLabel, [], REPORT_HEADERS, REPORT_COLUMN_WEIGHTS, reportRows());
+      showToast({
+        type: "success",
+        title: "PDF de Vendas por operador gerado",
+        message: "Clique aqui para abrir a pasta",
+        onClick: () => openContainingFolder(path!),
+      });
     } catch (err) {
       logger.error("falha ao exportar PDF de vendas por operador", path, err);
-      setExportError(String(err));
+      showToast({ type: "error", title: "Falha ao exportar PDF de Vendas por operador", message: String(err) });
     }
   }
 
@@ -119,8 +130,6 @@ export function VendasPorOperadorPage() {
           ⭱ Exportar PDF
         </Button>
       </PeriodToolbar>
-
-      {exportError && <p className="mb-4 text-xs text-danger">{exportError}</p>}
 
       <Card title="Vendas por operador" hint={periodLabel}>
         {byOperator.length === 0 ? (

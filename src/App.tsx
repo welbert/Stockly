@@ -3,10 +3,14 @@ import { AppShell } from "./components/layout/AppShell";
 import { AuthGate } from "./components/layout/AuthGate";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import { ToastProvider } from "./context/ToastContext";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DevedoresPage } from "./pages/DevedoresPage";
 import { InventoryPage } from "./pages/InventoryPage";
 import { ReportPlaceholderPage } from "./pages/ReportPlaceholderPage";
+import { HistoricoPrecoPage } from "./pages/reports/HistoricoPrecoPage";
+import { ItensParadosPage } from "./pages/reports/ItensParadosPage";
+import { MovimentacaoEstoquePage } from "./pages/reports/MovimentacaoEstoquePage";
 import { VendasComparativoPeriodosPage } from "./pages/reports/VendasComparativoPeriodosPage";
 import { VendasPorCategoriaItemPage } from "./pages/reports/VendasPorCategoriaItemPage";
 import { VendasPorFormaPagamentoPage } from "./pages/reports/VendasPorFormaPagamentoPage";
@@ -28,33 +32,38 @@ function HomeRedirect() {
 
 function App() {
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route element={<AuthGate />}>
-              <Route element={<AppShell />}>
-                <Route index element={<HomeRedirect />} />
-                <Route path="dashboard" element={<DashboardPage />} />
-                <Route path="venda" element={<SalesPage />} />
-                <Route path="estoque" element={<InventoryPage />} />
-                <Route path="devedores" element={<DevedoresPage />} />
-                <Route path="historico" element={<SalesHistoryPage />} />
-                <Route path="relatorios/vendas-periodo" element={<VendasPorPeriodoPage />} />
-                <Route path="relatorios/vendas-categoria-item" element={<VendasPorCategoriaItemPage />} />
-                <Route path="relatorios/vendas-forma-pagamento" element={<VendasPorFormaPagamentoPage />} />
-                <Route path="relatorios/vendas-operador" element={<VendasPorOperadorPage />} />
-                <Route path="relatorios/comparativo-periodos" element={<VendasComparativoPeriodosPage />} />
-                <Route path="relatorios/:slug" element={<ReportPlaceholderPage />} />
-                <Route path="configuracoes" element={<SettingsPage />} />
-                <Route path="usuarios" element={<UsersPage />} />
+    <ToastProvider>
+      <AuthProvider>
+        <ThemeProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route element={<AuthGate />}>
+                <Route element={<AppShell />}>
+                  <Route index element={<HomeRedirect />} />
+                  <Route path="dashboard" element={<DashboardPage />} />
+                  <Route path="venda" element={<SalesPage />} />
+                  <Route path="estoque" element={<InventoryPage />} />
+                  <Route path="devedores" element={<DevedoresPage />} />
+                  <Route path="historico" element={<SalesHistoryPage />} />
+                  <Route path="relatorios/vendas-periodo" element={<VendasPorPeriodoPage />} />
+                  <Route path="relatorios/vendas-categoria-item" element={<VendasPorCategoriaItemPage />} />
+                  <Route path="relatorios/vendas-forma-pagamento" element={<VendasPorFormaPagamentoPage />} />
+                  <Route path="relatorios/vendas-operador" element={<VendasPorOperadorPage />} />
+                  <Route path="relatorios/comparativo-periodos" element={<VendasComparativoPeriodosPage />} />
+                  <Route path="relatorios/movimentacao-estoque" element={<MovimentacaoEstoquePage />} />
+                  <Route path="relatorios/historico-preco" element={<HistoricoPrecoPage />} />
+                  <Route path="relatorios/itens-parados" element={<ItensParadosPage />} />
+                  <Route path="relatorios/:slug" element={<ReportPlaceholderPage />} />
+                  <Route path="configuracoes" element={<SettingsPage />} />
+                  <Route path="usuarios" element={<UsersPage />} />
+                </Route>
               </Route>
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </ThemeProvider>
-    </AuthProvider>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </ThemeProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 
