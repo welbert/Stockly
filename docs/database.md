@@ -68,7 +68,9 @@ An item with `category_id IS NULL` is displayed as "Categoria indefinida" (front
 | `user_id` | INTEGER NOT NULL → `users(id)` | who caused the movement |
 | `created_at` | TEXT | |
 
-Never edited or deleted. Written by `commands::items` (`initial` on `create_item` when the starting quantity is `> 0`, `entry` on `add_stock_entry`, `adjustment` on `update_item` when its `quantity` field's value differs from what was stored) and by `commands::sales` (`sale` on `create_sale`, one row per line item, `sale_id` set — inserted only after the `sales` row exists in the same transaction, so the reference is always valid; `refund` on `cancel_sale`, one row per line whose item still exists, reversing the original `sale` decrement). `items.quantity` is always updated in the same statement/transaction as the matching ledger row — the ledger is the "why", the item's column is the fast "how much now". No consultation screen yet — it's still just the data source for a possible future stock-rupture forecast (see `docs/future.md`).
+Never edited or deleted. Written by `commands::items` (`initial` on `create_item` when the starting quantity is `> 0`, `entry` on `add_stock_entry`, `adjustment` on `update_item` when its `quantity` field's value differs from what was stored) and by `commands::sales` (`sale` on `create_sale`, one row per line item, `sale_id` set — inserted only after the `sales` row exists in the same transaction, so the reference is always valid; `refund` on `cancel_sale`, one row per line whose item still exists, reversing the original `sale` decrement). `items.quantity` is always updated in the same statement/transaction as the matching ledger row — the ledger is the "why", the item's column is the fast "how much now". Now has its own consultation screen (`MovimentacaoEstoquePage`, `relatorios/movimentacao-estoque` — see `docs/frontend.md`) and remains the data source for a possible future stock-rupture forecast (see `docs/future.md`).
+
+Indexed on `item_id` and `created_at` — the latter added later, same reasoning as `sales.created_at` above: `list_stock_movements`' `ORDER BY created_at DESC` is what every consumer (this report, `ItensParadosPage`, the Dashboard's low-stock cards) sorts by.
 
 ### `item_price_history` — append-only ledger for `cost_price`/`sale_price`
 | Column | Type | Notes |
@@ -79,7 +81,9 @@ Never edited or deleted. Written by `commands::items` (`initial` on `create_item
 | `user_id` | INTEGER NOT NULL → `users(id)` | who changed it — this table doubles as a pricing audit trail, not just a history |
 | `created_at` | TEXT | |
 
-Same shape and purpose as `stock_movements`, just for the two price columns instead of quantity — including `item_id ON DELETE CASCADE` (see `delete_item` above: only a sale blocks deletion, so this ledger never needs to). Written by `commands::items::create_item` **unconditionally** (the item's starting `cost_price`/`sale_price`, so the very first value is always in the ledger, not just the ones after it) and again by `update_item` whenever at least one of the two actually differs from what was stored (mirrors `stock_movements`' `adjustment` row only firing when `quantity` differs) — editing an item without touching either price writes nothing here. Unlike `stock_movements`' `initial` (which is skipped when the starting quantity is `0`, since there's no movement to explain), the price row is never skipped: every item always has *some* price from the moment it exists, so there's no equivalent "nothing happened yet" case. No consultation screen yet, same as `stock_movements` — just the data source for a possible future price/margin report.
+Same shape and purpose as `stock_movements`, just for the two price columns instead of quantity — including `item_id ON DELETE CASCADE` (see `delete_item` above: only a sale blocks deletion, so this ledger never needs to). Written by `commands::items::create_item` **unconditionally** (the item's starting `cost_price`/`sale_price`, so the very first value is always in the ledger, not just the ones after it) and again by `update_item` whenever at least one of the two actually differs from what was stored (mirrors `stock_movements`' `adjustment` row only firing when `quantity` differs) — editing an item without touching either price writes nothing here. Unlike `stock_movements`' `initial` (which is skipped when the starting quantity is `0`, since there's no movement to explain), the price row is never skipped: every item always has *some* price from the moment it exists, so there's no equivalent "nothing happened yet" case. Now has its own consultation screen (`HistoricoPrecoPage`, `relatorios/historico-preco` — see `docs/frontend.md`); also still the data source for a possible future price/margin report.
+
+Indexed on `item_id` and `created_at` — the latter added later, same reasoning as `stock_movements.created_at` above: `list_item_price_history`'s `ORDER BY created_at DESC` is what `HistoricoPrecoPage` sorts by.
 
 ### `clients` — Crediário debtors
 | Column | Type | Notes |
@@ -113,7 +117,7 @@ Not a `users` row — clients never log in.
 
 Cancelling/reverting a sale (`commands::sales::cancel_sale`, from Histórico de vendas or Devedores' "Ver venda") never deletes the row — it flips `status` to `cancelled` and fills the three `cancelled_*`/`cancel_authorized_*` columns, plus reverses the stock (a `refund`-type row per item in `stock_movements`, only for lines whose item wasn't hard-deleted since). A Crediário client's open balance is **never a stored column** — it's always `SUM(sales.total WHERE client_id = ? AND status = 'completed' AND <a 'credit' sale_payments row exists>) - SUM(credit_payments.amount WHERE client_id = ? AND cancelled_at IS NULL)`, computed on read. Cancelling a Crediário sale reduces the client's balance automatically, just by excluding it from that sum — `cancel_sale` never touches `credit_payments`/`credit_payment_allocations` even if money had already been applied to this sale, at sale time or later: that amount simply becomes floating credit for the client instead of being reversed.
 
-Indexed on `client_id` and `status` (the two columns "Devedores" and sale listings filter by).
+Indexed on `client_id` and `status` (the two columns "Devedores" and sale listings filter by), plus `created_at` — added later, once report count grew: almost every Vendas relatório reads through `list_sales`' `ORDER BY created_at DESC`, so this index saves that sort instead of just narrowing rows (the app fetches every sale and filters/aggregates client-side, no `WHERE` on date — see `docs/commands.md`). Also two partial indexes, `discount_authorized_by_user_id` and `cancel_authorized_by_user_id`, each `WHERE ... IS NOT NULL` — the exact predicate `list_admin_authorizations` filters on for its "desconto concedido"/"venda cancelada" queries.
 
 ### `sale_payments` — payment method(s) per sale
 | Column | Type | Notes |
@@ -153,6 +157,8 @@ Modeled as its own table from day one specifically so a future split-payment fea
 | `created_at` | TEXT | |
 
 A client's open balance only sums `amount` where `cancelled_at IS NULL` (see `commands::clients::client_balance`) — cancelling a payment is what makes the balance go back up, no separate reversal entry needed.
+
+Indexed on `client_id`, plus `created_at` (`list_credit_payments`' `ORDER BY created_at DESC`, feeding Pagamentos recebidos/cancelados) and a partial index on `cancel_authorized_by_user_id WHERE ... IS NOT NULL` (the exact predicate `list_admin_authorizations` filters on).
 
 ### `credit_payment_allocations` — which sale(s) a payment covers
 | Column | Type | Notes |

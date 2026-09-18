@@ -83,6 +83,13 @@ pub struct StockMovementRow {
     pub quantity_delta: i64,
     pub user_name: String,
     pub created_at: String,
+    /// The linked sale's `status` (`"completed"`/`"cancelled"`) when
+    /// `sale_id` is set (`movement_type` `"sale"` or `"refund"`), `None`
+    /// otherwise. Lets a consumer tell a `sale` movement whose sale was
+    /// later cancelled apart from one that's still live — e.g.
+    /// `ItensParadosPage` shouldn't treat a fully-estornada sale as recent
+    /// activity when deciding an item is still "moving".
+    pub sale_status: Option<String>,
 }
 
 /// One `item_price_history` row, joined with its item/user names — same

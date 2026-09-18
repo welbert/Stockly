@@ -236,6 +236,36 @@ fn migrate_db(conn: &Connection) {
         );
         CREATE INDEX IF NOT EXISTS idx_item_price_history_item ON item_price_history(item_id);",
     );
+    // `created_at` has no index on any table by default (only foreign keys
+    // do) — these four are the ones worth it, one per report-backing
+    // `list_*` command that does a full-table `ORDER BY created_at DESC`:
+    // `sales.created_at` (`list_sales`, read by almost every Vendas report),
+    // `stock_movements.created_at` (`list_stock_movements`),
+    // `credit_payments.created_at` (`list_credit_payments`, Pagamentos
+    // recebidos/cancelados) and `item_price_history.created_at`
+    // (`list_item_price_history`, Histórico de alteração de preço). Doesn't
+    // help the Dashboard's `strftime('%Y-%m', created_at, 'localtime') = ?1`
+    // filters — wrapping the column in a function makes those non-sargable,
+    // which would need a separate expression index not judged worth the
+    // complexity here.
+    let _ = conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
+         CREATE INDEX IF NOT EXISTS idx_stock_movements_created_at ON stock_movements(created_at);
+         CREATE INDEX IF NOT EXISTS idx_credit_payments_created_at ON credit_payments(created_at);
+         CREATE INDEX IF NOT EXISTS idx_item_price_history_created_at ON item_price_history(created_at);",
+    );
+    // Partial indexes matching `commands::audit::list_admin_authorizations`'s
+    // 3 `WHERE ... IS NOT NULL` queries exactly — each one otherwise scans
+    // every `sales`/`credit_payments` row just to find the handful that were
+    // ever discount/cancel-authorized.
+    let _ = conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_sales_discount_authorized_by
+             ON sales(discount_authorized_by_user_id) WHERE discount_authorized_by_user_id IS NOT NULL;
+         CREATE INDEX IF NOT EXISTS idx_sales_cancel_authorized_by
+             ON sales(cancel_authorized_by_user_id) WHERE cancel_authorized_by_user_id IS NOT NULL;
+         CREATE INDEX IF NOT EXISTS idx_credit_payments_cancel_authorized_by
+             ON credit_payments(cancel_authorized_by_user_id) WHERE cancel_authorized_by_user_id IS NOT NULL;",
+    );
 }
 
 /// In-memory connection with the schema applied — reused by other modules'

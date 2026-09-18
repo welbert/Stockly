@@ -123,10 +123,11 @@ pub fn list_stock_movements(state: State<AppState>) -> Result<Vec<StockMovementR
     active_user_id(&state)?;
     let mut stmt = conn
         .prepare(
-            "SELECT sm.id, sm.item_id, i.name, sm.movement_type, sm.quantity_delta, u.name, sm.created_at
+            "SELECT sm.id, sm.item_id, i.name, sm.movement_type, sm.quantity_delta, u.name, sm.created_at, s.status
              FROM stock_movements sm
              JOIN items i ON i.id = sm.item_id
              JOIN users u ON u.id = sm.user_id
+             LEFT JOIN sales s ON s.id = sm.sale_id
              ORDER BY sm.created_at DESC",
         )
         .map_err(|e| e.to_string())?;
@@ -140,6 +141,7 @@ pub fn list_stock_movements(state: State<AppState>) -> Result<Vec<StockMovementR
                 quantity_delta: row.get(4)?,
                 user_name: row.get(5)?,
                 created_at: row.get(6)?,
+                sale_status: row.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?;

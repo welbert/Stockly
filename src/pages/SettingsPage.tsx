@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useAuth } from "../context/AuthContext";
 import {
+  clearBackupFolder,
   effectiveAutoLockMinutes,
+  getBackupFolder,
   getCreditEnabled,
   getDefaultProfitMargin,
   getLowStockPercent,
@@ -9,6 +12,8 @@ import {
   getStoreInfo,
   getStoreName,
   openLogDir,
+  runBackup,
+  setBackupFolder,
   setCreditEnabled,
   setDefaultProfitMargin,
   setLowStockPercent,
@@ -20,6 +25,7 @@ import {
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Checkbox } from "../components/Checkbox";
+import { RestoreBackupModal } from "../components/RestoreBackupModal";
 import { ThemeSwitcher } from "../components/ThemeSwitcher";
 import { useToast } from "../context/ToastContext";
 import { logger } from "../logger";
@@ -43,6 +49,8 @@ export function SettingsPage() {
   const [storeInfo, setStoreInfoState] = useState<string | null>(null);
   const [thankYouMessage, setThankYouMessageState] = useState<string | null>(null);
   const [creditEnabled, setCreditEnabledState] = useState<boolean | null>(null);
+  const [backupFolder, setBackupFolderState] = useState<string | null | undefined>(undefined);
+  const [restorePath, setRestorePath] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.isAdmin) {
@@ -64,6 +72,9 @@ export function SettingsPage() {
       getCreditEnabled()
         .then(setCreditEnabledState)
         .catch((err) => logger.error("falha ao ler se o Crediário está habilitado", err));
+      getBackupFolder()
+        .then(setBackupFolderState)
+        .catch((err) => logger.error("falha ao ler pasta de backup", err));
     }
   }, [user]);
 
@@ -140,6 +151,57 @@ export function SettingsPage() {
       logger.error("falha ao alterar disponibilidade do Crediário", err);
       showToast({ type: "error", title: "Não foi possível alterar a disponibilidade do Crediário", message: String(err) });
     }
+  }
+
+  async function handleChooseBackupFolder() {
+    let selected: string | string[] | null;
+    try {
+      selected = await open({ directory: true, multiple: false });
+    } catch (err) {
+      logger.error("falha ao selecionar pasta de backup", err);
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de pasta" });
+      return;
+    }
+    if (!selected || Array.isArray(selected)) return;
+    try {
+      await setBackupFolder(selected);
+      setBackupFolderState(selected);
+    } catch (err) {
+      logger.error("falha ao salvar pasta de backup", selected, err);
+      showToast({ type: "error", title: "Não foi possível salvar a pasta de backup" });
+      return;
+    }
+    try {
+      await runBackup();
+      showToast({ type: "success", title: "Pasta de backup atualizada", message: "Backup feito com sucesso." });
+    } catch (err) {
+      logger.error("falha ao rodar backup inicial após configurar a pasta", err);
+      showToast({ type: "error", title: "Pasta de backup atualizada, mas o backup inicial falhou", message: String(err) });
+    }
+  }
+
+  async function handleDisableBackup() {
+    try {
+      await clearBackupFolder();
+      setBackupFolderState(null);
+      showToast({ type: "success", title: "Backup automático desativado" });
+    } catch (err) {
+      logger.error("falha ao desativar backup automático", err);
+      showToast({ type: "error", title: "Não foi possível desativar o backup" });
+    }
+  }
+
+  async function handleChooseRestoreFile() {
+    let selected: string | string[] | null;
+    try {
+      selected = await open({ directory: false, multiple: false, filters: [{ name: "Banco de dados", extensions: ["db"] }] });
+    } catch (err) {
+      logger.error("falha ao selecionar arquivo de backup", err);
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de arquivo" });
+      return;
+    }
+    if (!selected || Array.isArray(selected)) return;
+    setRestorePath(selected);
   }
 
   return (
@@ -227,6 +289,40 @@ export function SettingsPage() {
         </Card>
       )}
 
+      {user.isAdmin && backupFolder !== undefined && (
+        <Card title="Backup" className="col-span-2">
+          <p className="text-sm text-theme-3">
+            {backupFolder
+              ? `Pasta atual: ${backupFolder}`
+              : "Nenhuma pasta selecionada. O backup automático fica desativado até escolher uma."}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button variant="secondary" onClick={handleChooseBackupFolder}>
+              {backupFolder ? "Alterar pasta" : "Selecionar pasta"}
+            </Button>
+            {backupFolder && (
+              <Button variant="secondary" onClick={handleDisableBackup}>
+                Desativar backup
+              </Button>
+            )}
+          </div>
+          <p className="mt-2.5 text-xs text-theme-3">
+            O banco de dados é copiado para essa pasta (arquivo fixo <code>stockly-backup.db</code>, sobrescrito a cada
+            execução) ao abrir o app e, em seguida, a cada 10 minutos enquanto ele permanece aberto.
+          </p>
+
+          <div className="mt-5 border-t border-theme-border pt-5">
+            <Button variant="secondary" onClick={handleChooseRestoreFile}>
+              Restaurar backup
+            </Button>
+            <p className="mt-2.5 text-xs text-theme-3">
+              Substitui todos os dados atuais pelos de um arquivo .db escolhido. O app reinicia sozinho depois de
+              restaurar.
+            </p>
+          </div>
+        </Card>
+      )}
+
       {user.isAdmin && storeName !== null && storeInfo !== null && (
         <Card title="Recibo" className="col-span-2">
           <label className="mb-1.5 block text-xs font-semibold text-theme-3">Nome da loja</label>
@@ -268,6 +364,8 @@ export function SettingsPage() {
           )}
         </Card>
       )}
+
+      {restorePath && <RestoreBackupModal path={restorePath} onClose={() => setRestorePath(null)} />}
     </div>
   );
 }

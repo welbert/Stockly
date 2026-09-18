@@ -160,6 +160,9 @@ export type StockMovementRow = {
   quantityDelta: number;
   userName: string;
   createdAt: string;
+  /** The linked sale's status (`"completed"`/`"cancelled"`) when this
+   * movement has one (`movementType` `"sale"`/`"refund"`), `null` otherwise. */
+  saleStatus: string | null;
 };
 
 export function listStockMovements() {
@@ -817,4 +820,30 @@ export function saveDashboardLayout(items: DashboardLayoutItem[]) {
 
 export function getDashboardData() {
   return call<DashboardData>("get_dashboard_data");
+}
+
+/** Backup do banco (`Plans/PLANO.md`'s "Backup do banco") — Admin-only both
+ * ways, except `runBackup`, which is called regardless of the active
+ * profile (see `commands::backup::run_backup`'s doc comment for why). */
+export function getBackupFolder() {
+  return call<string | null>("get_backup_folder");
+}
+
+export function setBackupFolder(path: string) {
+  return call<void>("set_backup_folder", { path });
+}
+
+export function clearBackupFolder() {
+  return call<void>("clear_backup_folder");
+}
+
+export function runBackup() {
+  return call<void>("run_backup");
+}
+
+/** Validates `path` is really a Stockly `.db` file and overwrites the
+ * active database with it — the app has to restart afterward to reopen the
+ * imported file fresh (see `SettingsPage`'s `relaunch()` call right after). */
+export function importBackup(path: string) {
+  return call<void>("import_backup", { path });
 }

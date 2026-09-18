@@ -3,7 +3,8 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { NavigationGuardContext } from "../../context/NavigationGuardContext";
-import { getStoreName } from "../../lib/api";
+import { useToast } from "../../context/ToastContext";
+import { getStoreName, runBackup } from "../../lib/api";
 import { REPORT_GROUPS, findReport, reportPath } from "../../lib/reportsCatalog";
 import { logger } from "../../logger";
 import { ConfirmModal } from "../ConfirmModal";
@@ -83,6 +84,15 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
 };
 
 const REPORT_PATH_PREFIX = "/relatorios/";
+
+/** `run_backup` is a no-op when no `backup_folder` is configured yet — see
+ * that command's doc comment for why this fires regardless of which profile
+ * is logged in, unlike every other backup command (Admin-only). Runs once on
+ * mount, then every 10 minutes for as long as the app stays open
+ * (`Plans/PLANO.md`'s "Backup do banco": deliberately more often than the
+ * sibling CashVault project's "once per launch", since Stockly tends to stay
+ * open a whole shift). */
+const BACKUP_INTERVAL_MS = 10 * 60 * 1000;
 
 /** Whether `pathname` matches a link anywhere under this group, at any
  * depth — a group defaults open when this is true, so landing on a report
@@ -174,6 +184,7 @@ function NavItemRenderer({ item, depth, pathname, manualOpen, onToggle, onNaviga
 
 export function AppShell() {
   const { user, logout } = useAuth();
+  const { showToast } = useToast();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { secondsUntilLock } = useOutletContext<AuthGateOutletContext>();
@@ -192,6 +203,19 @@ export function AppShell() {
     getStoreName()
       .then(setStoreName)
       .catch((err) => logger.error("falha ao ler nome da loja", err));
+  }, []);
+
+  useEffect(() => {
+    function backup() {
+      runBackup().catch((err) => {
+        logger.error("falha ao rodar backup automático do banco", err);
+        showToast({ type: "error", title: "Falha ao fazer backup do banco de dados", message: String(err) });
+      });
+    }
+    backup();
+    const interval = setInterval(backup, BACKUP_INTERVAL_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

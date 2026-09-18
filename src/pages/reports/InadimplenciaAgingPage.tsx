@@ -86,31 +86,35 @@ export function InadimplenciaAgingPage() {
   }, []);
 
   const debtors = useMemo(() => {
-    const phoneByClient = new Map(clients.map((c) => [c.id, c.phone]));
-    const byClient = new Map<number, { clientName: string; balance: number; oldestOpenSale: string }>();
+    // `balance` comes from `ClientSummary` (server-side `client_balance`, one
+    // `round2` over the client's aggregate), not summed here from each sale's
+    // own `remaining` — summing several already-rounded per-sale `remaining`
+    // values and rounding *that* again can drift a cent or two from the
+    // single aggregate rounding `client_balance`/Devedores/Dashboard all show
+    // for the same client. `creditSales` is only still needed for
+    // `oldestOpenSale`, which has no equivalent aggregate to reuse.
+    const oldestOpenSaleByClient = new Map<number, string>();
     for (const s of creditSales) {
       if (s.remaining <= 0.004) continue;
-      const entry = byClient.get(s.clientId);
-      if (entry) {
-        entry.balance += s.remaining;
-        if (s.createdAt < entry.oldestOpenSale) entry.oldestOpenSale = s.createdAt;
-      } else {
-        byClient.set(s.clientId, { clientName: s.clientName, balance: s.remaining, oldestOpenSale: s.createdAt });
-      }
+      const current = oldestOpenSaleByClient.get(s.clientId);
+      if (!current || s.createdAt < current) oldestOpenSaleByClient.set(s.clientId, s.createdAt);
     }
     const today = todayKey();
-    const list: DebtorAging[] = [...byClient.entries()].map(([clientId, v]) => {
-      const daysOverdue = daysBetween(localDateKey(v.oldestOpenSale), today);
-      return {
-        clientId,
-        clientName: v.clientName,
-        phone: phoneByClient.get(clientId) ?? null,
-        balance: Math.round(v.balance * 100) / 100,
-        oldestOpenSale: v.oldestOpenSale,
-        daysOverdue,
-        bucket: bucketFor(daysOverdue),
-      };
-    });
+    const list: DebtorAging[] = clients
+      .filter((c) => c.balance > 0 && oldestOpenSaleByClient.has(c.id))
+      .map((c) => {
+        const oldestOpenSale = oldestOpenSaleByClient.get(c.id)!;
+        const daysOverdue = daysBetween(localDateKey(oldestOpenSale), today);
+        return {
+          clientId: c.id,
+          clientName: c.name,
+          phone: c.phone,
+          balance: c.balance,
+          oldestOpenSale,
+          daysOverdue,
+          bucket: bucketFor(daysOverdue),
+        };
+      });
     return list.sort((a, b) => b.daysOverdue - a.daysOverdue);
   }, [creditSales, clients]);
 

@@ -55,7 +55,11 @@ export function ItensParadosPage() {
   const lastSaleByItem = useMemo(() => {
     const map = new Map<number, string>();
     for (const m of movements) {
-      if (m.movementType !== "sale") continue;
+      // A `sale` movement whose sale was later cancelled/estornada isn't
+      // real recent activity anymore (the stock came back via a separate
+      // `refund` row) — counting it would hide an item that should show up
+      // here as parado.
+      if (m.movementType !== "sale" || m.saleStatus === "cancelled") continue;
       const cur = map.get(m.itemId);
       if (!cur || m.createdAt > cur) map.set(m.itemId, m.createdAt);
     }

@@ -109,6 +109,11 @@ pub fn run() {
             commands::dashboard_layout::get_dashboard_layout,
             commands::dashboard_layout::save_dashboard_layout,
             commands::dashboard::get_dashboard_data,
+            commands::backup::get_backup_folder,
+            commands::backup::set_backup_folder,
+            commands::backup::clear_backup_folder,
+            commands::backup::run_backup,
+            commands::backup::import_backup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
