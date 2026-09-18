@@ -296,6 +296,8 @@ export type SaleListItem = {
   paymentMethod: PaymentMethod;
   total: number;
   status: string;
+  /** Combined discount (item-level + general) — `0` when the sale had none. */
+  discountValue: number;
 };
 
 /** Arredondamento pra 2 casas decimais — mesma regra do `money::round2` no
@@ -347,6 +349,10 @@ export function printFile(path: string) {
 
 export function openReceiptsFolder() {
   return call<void>("open_receipts_folder");
+}
+
+export function openReceiptFile(path: string) {
+  return call<void>("open_receipt_file", { path });
 }
 
 export function openLogDir() {

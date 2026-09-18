@@ -48,7 +48,7 @@ export function SaleDetailModal({ saleId, admins, requiresAuth, onClose, onCance
             <div>Recibo: {sale.receiptNumber}</div>
             <div>Data: {fmtDateTime(sale.createdAt)}</div>
             <div>Operador: {sale.userName}</div>
-            {sale.clientName && <div>Cliente (Crediário): {sale.clientName}</div>}
+            {sale.clientName && <div>Cliente: {sale.clientName}</div>}
             <hr className="my-2 border-dashed border-theme-border" />
             {sale.items.map((item, i) => (
               <div key={i} className="flex justify-between gap-2">
@@ -75,7 +75,7 @@ export function SaleDetailModal({ saleId, admins, requiresAuth, onClose, onCance
                   <span>{fmt(sale.creditPaid)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Saldo Crediário</span>
+                  <span>Valor devido</span>
                   <span>{fmt(sale.total - sale.creditPaid)}</span>
                 </div>
               </>

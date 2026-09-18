@@ -103,7 +103,6 @@ pub(crate) fn render_receipt_pdf(conn: &Connection, sale_id: i64, dir: &Path) ->
     let height_mm = 46.0
         + item_lines * 9.0
         + store_info_lines.len() as f64 * 4.0
-        + if sale.discount_authorized_by_name.is_some() { 5.0 } else { 0.0 }
         + if sale.client_name.is_some() { 5.0 } else { 0.0 }
         + if sale.credit_paid.is_some() { 10.0 } else { 0.0 };
     doc.set_paper_size((80, height_mm));
@@ -118,7 +117,7 @@ pub(crate) fn render_receipt_pdf(conn: &Connection, sale_id: i64, dir: &Path) ->
     doc.push(elements::Paragraph::new(format!("Data: {}", fmt_local_datetime(&sale.created_at))));
     doc.push(elements::Paragraph::new(format!("Operador: {}", sale.user_name)));
     if let Some(client_name) = &sale.client_name {
-        doc.push(elements::Paragraph::new(format!("Cliente (Crediário): {client_name}")));
+        doc.push(elements::Paragraph::new(format!("Cliente: {client_name}")));
     }
     push_separator(&mut doc);
 
@@ -126,9 +125,9 @@ pub(crate) fn render_receipt_pdf(conn: &Connection, sale_id: i64, dir: &Path) ->
         doc.push(elements::Paragraph::new(item.item_name.clone()));
         let mut detail = format!("  {}x {}", item.quantity, fmt_money(item.unit_price));
         if let Some(pct) = item.discount_percent {
-            detail.push_str(&format!(" (desc. item -{pct:.0}%)"));
-        } else if item.discount_amount.is_some() {
-            detail.push_str(" (com desconto)");
+            detail.push_str(&format!(" (desc. -{pct:.0}%)"));
+        } else if let Some(amount) = item.discount_amount {
+            detail.push_str(&format!(" (desc. -{})", fmt_money(amount)));
         }
         push_line(&mut doc, detail, fmt_money(item.subtotal), false);
     }
@@ -145,10 +144,7 @@ pub(crate) fn render_receipt_pdf(conn: &Connection, sale_id: i64, dir: &Path) ->
     push_line(&mut doc, "TOTAL", fmt_money(sale.total), true);
     if let Some(paid) = sale.credit_paid {
         push_line(&mut doc, "Valor pago", fmt_money(paid), false);
-        push_line(&mut doc, "Saldo Crediário", fmt_money(sale.total - paid), false);
-    }
-    if let Some(name) = &sale.discount_authorized_by_name {
-        doc.push(elements::Paragraph::new(format!("Descontos autorizados por: {name}")).styled(style::Style::new().italic()));
+        push_line(&mut doc, "Valor devido", fmt_money(sale.total - paid), false);
     }
     push_separator(&mut doc);
 
@@ -209,4 +205,14 @@ pub fn open_receipts_folder(app: tauri::AppHandle, state: State<AppState>) -> Re
     let dir = receipts_dir(&state.db_path);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     app.opener().open_path(dir.to_string_lossy(), None::<String>).map_err(|e| e.to_string())
+}
+
+/// Opens one specific receipt PDF (e.g. "Abrir PDF" from Histórico de vendas)
+/// with whatever's associated with .pdf on the user's machine — as opposed to
+/// `open_receipts_folder`, which just reveals the whole folder.
+#[tauri::command]
+pub fn open_receipt_file(app: tauri::AppHandle, state: State<AppState>, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    active_user_id(&state)?;
+    app.opener().open_path(path, None::<String>).map_err(|e| e.to_string())
 }

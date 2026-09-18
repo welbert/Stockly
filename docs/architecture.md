@@ -55,7 +55,7 @@ One file per domain, each declared in `commands/mod.rs` and individually registe
 | `items.rs` | item CRUD, stock entries/adjustments/deactivation |
 | `config.rs` | generic `config` key/value settings (low-stock %, profit margin %) |
 | `sales.rs` | PDV: sale creation (stock baixa, receipt numbering, discounts) |
-| `receipts.rs` | PDF receipt generation (`genpdf`), regeneration, print, open-folder |
+| `receipts.rs` | PDF receipt generation (`genpdf`), regeneration, print, open-folder, open-file |
 | `logging.rs` | frontend → log file bridge |
 
 `src-tauri/src/money.rs` holds `round2` (float rounded to 2 decimals after every operation), shared by `items.rs` (price fields) and `sales.rs` (subtotal/discount/total math) — the one place that rounding rule is implemented.

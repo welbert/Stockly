@@ -230,7 +230,8 @@ pub fn list_sales(state: State<AppState>) -> Result<Vec<SaleListItem>, String> {
     active_user_id(&state)?;
     let mut stmt = conn
         .prepare(
-            "SELECT s.id, s.receipt_number, s.created_at, u.name, c.name, sp.payment_method, s.total, s.status
+            "SELECT s.id, s.receipt_number, s.created_at, u.name, c.name, sp.payment_method, s.total, s.status,
+                    COALESCE((SELECT SUM(si.unit_price * si.quantity) FROM sale_items si WHERE si.sale_id = s.id), 0) - s.total
              FROM sales s
              JOIN users u ON u.id = s.user_id
              LEFT JOIN clients c ON c.id = s.client_id
@@ -249,6 +250,7 @@ pub fn list_sales(state: State<AppState>) -> Result<Vec<SaleListItem>, String> {
                 payment_method: row.get(5)?,
                 total: row.get(6)?,
                 status: row.get(7)?,
+                discount_value: round2(row.get(8)?),
             })
         })
         .map_err(|e| e.to_string())?;

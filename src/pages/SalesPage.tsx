@@ -4,6 +4,7 @@ import type { ItemSummary, PaymentMethod, SaleDetail, UserSummary } from "../lib
 import {
   createSale,
   getCreditEnabled,
+  getLowStockPercent,
   getReceiptThankYouMessage,
   getStoreInfo,
   getStoreName,
@@ -18,6 +19,8 @@ import { Kbd } from "../components/Kbd";
 import { KeyboardShortcutsModal } from "../components/KeyboardShortcutsModal";
 import { PaymentModal } from "../components/PaymentModal";
 import { ReceiptResultModal } from "../components/ReceiptResultModal";
+import { StockBrowserModal } from "../components/StockBrowserModal";
+import { useNavigationGuard } from "../context/NavigationGuardContext";
 import { fmt, normalize } from "../lib/format";
 import { logger } from "../logger";
 
@@ -77,11 +80,19 @@ export function SalesPage() {
   const [saleError, setSaleError] = useState<string | null>(null);
   const [completedSale, setCompletedSale] = useState<SaleDetail | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showStockBrowser, setShowStockBrowser] = useState(false);
+  const [lowStockPercent, setLowStockPercent] = useState(20);
   const [storeName, setStoreName] = useState("");
   const [storeInfo, setStoreInfo] = useState("");
   const [thankYouMessage, setThankYouMessage] = useState("");
   const [creditEnabled, setCreditEnabled] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Warns before leaving Venda via the sidebar while there's a sale in
+  // progress — losing a half-built cart to an accidental click was the
+  // original complaint; the stock browser below addresses the other half
+  // (wanting to see the full stock without leaving this screen at all).
+  useNavigationGuard(cart.length > 0);
 
   function reload() {
     listItems()
@@ -106,6 +117,9 @@ export function SalesPage() {
     getCreditEnabled()
       .then(setCreditEnabled)
       .catch((err) => logger.error("falha ao ler se o Crediário está habilitado", err));
+    getLowStockPercent()
+      .then(setLowStockPercent)
+      .catch((err) => logger.error("falha ao ler percentual de alerta de estoque", err));
   }, []);
 
   useEffect(() => {
@@ -120,7 +134,8 @@ export function SalesPage() {
     generalDiscountAmount ?? (generalDiscountPercent ? round2((subtotal * generalDiscountPercent) / 100) : 0);
   const total = round2(subtotal - generalDiscountValue);
 
-  const modalOpen = discountTarget !== null || showPayment || cancelConfirm || completedSale !== null || showShortcuts;
+  const modalOpen =
+    discountTarget !== null || showPayment || cancelConfirm || completedSale !== null || showShortcuts || showStockBrowser;
 
   // Whenever the last modal closes, focus goes back to the search field —
   // this whole screen is meant to never need the mouse to keep adding items.
@@ -306,7 +321,7 @@ export function SalesPage() {
 
   if (!user) return null;
 
-  const discountRequiresAuth = !user.isAdmin && !saleAuth;
+  const discountRequiresAuth = !user.isAdmin;
   const discountModalProps =
     discountTarget?.kind === "item"
       ? (() => {
@@ -347,6 +362,9 @@ export function SalesPage() {
             />
             <Button variant="primary" onClick={handleAddFromSearch}>
               Adicionar
+            </Button>
+            <Button variant="secondary" onClick={() => setShowStockBrowser(true)}>
+              Estoque
             </Button>
           </div>
 
@@ -404,7 +422,36 @@ export function SalesPage() {
                       <code className="text-xs">{line.code}</code>
                     </td>
                     <td className="px-3 py-2 text-theme-1">{line.name}</td>
-                    <td className="px-3 py-2 text-theme-1">{line.quantity}</td>
+                    <td className="px-3 py-2 text-theme-1">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedRow(index);
+                            adjustQuantity(index, -1);
+                          }}
+                          className="flex h-6 w-6 items-center justify-center rounded-full border border-theme-border text-theme-2 hover:bg-theme-hover-strong"
+                          aria-label="Diminuir quantidade"
+                        >
+                          -
+                        </button>
+                        <span className="w-6 text-center">{line.quantity}</span>
+                        <button
+                          type="button"
+                          disabled={line.quantity >= line.available}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedRow(index);
+                            adjustQuantity(index, 1);
+                          }}
+                          className="flex h-6 w-6 items-center justify-center rounded-full border border-theme-border text-theme-2 hover:bg-theme-hover-strong disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Aumentar quantidade"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-theme-1">{fmt(line.unitPrice)}</td>
                     <td className="px-3 py-2">
                       {line.discountPercent !== null || line.discountAmount !== null ? (
@@ -515,9 +562,12 @@ export function SalesPage() {
               type="button"
               onClick={() => setShowShortcuts(true)}
               aria-label="Ver atalhos de teclado"
-              className="flex h-4 w-4 items-center justify-center rounded-full bg-theme-hover text-[10px] font-bold text-theme-3 hover:bg-primary-soft hover:text-primary"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
             >
-              ?
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">
+                ?
+              </span>
+              Clique aqui para ajuda
             </button>
           </div>
         </div>
@@ -628,6 +678,16 @@ export function SalesPage() {
       )}
 
       {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
+
+      {showStockBrowser && (
+        <StockBrowserModal
+          items={items}
+          lowStockPercent={lowStockPercent}
+          error={addError}
+          onSelect={addItemToCart}
+          onClose={() => setShowStockBrowser(false)}
+        />
+      )}
     </div>
   );
 }

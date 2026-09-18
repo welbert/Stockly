@@ -4,6 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Stockly** ("Bora Vender" in the UI — see naming rule below) is a single-machine desktop inventory/POS app with Admin and Usuário (regular user) profiles: stock control, sales (PDV) with PDF receipts, Crediário/Devedores (store credit), dashboard, reports.
 
+## Docs
+
+Consult before working in the relevant area. **Keep docs up to date:**
+- If behavior you observe in the code differs from what a doc describes, correct the doc
+- If you implement a new component, store, or pattern that is relevant to an existing doc, add it there
+- If the change doesn't fit any existing doc, create a new file in `docs/` and add it to the table below
+
+| File | Content |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | Layers, data flow, `AppState`, session model, `guard.rs`, command module list |
+| [docs/frontend.md](docs/frontend.md) | Routing, pages, key components, context/hooks |
+| [docs/database.md](docs/database.md) | Full SQLite schema, table by table, with the design rationale behind each nullable/cascade/check |
+| [docs/commands.md](docs/commands.md) | Every Tauri command, by domain, with signature |
+| [docs/versioning.md](docs/versioning.md) | SemVer bump rules, the 3 files kept in sync |
+| [docs/future.md](docs/future.md) | Ideas/gaps noticed along the way but out of scope for now — outlives `Plans/PLANO.md` |
+
+**What's implemented so far** lives in `Plans/PLANO.md`'s "Próximos passos" checklist (kept up to date there, not duplicated here) — until that file is retired once everything in it is built.
+
 ## Naming rule
 
 "Stockly" is the technical/internal name only — npm package, Rust crate, Tauri `identifier` (`com.welbert.stockly`), table/file prefixes (`stockly-backup.db`). The UI-facing name is always **"Bora Vender"** (window title/`productName`, sidebar brand — falls back to it when no store name is configured in Configurações, login screen, receipts). Never surface "Stockly" in anything the end user sees — **except the sidebar footer's version line** (`AppShell.tsx`), a deliberate exception: shows "Stockly - v{version}" instead of "Bora Vender - v{version}", since the version being tracked is the app build's own, and "Stockly" reads more like a product/build identifier there than a customer-facing brand moment.
@@ -37,7 +55,7 @@ The **backend is the real access boundary**, not the UI hiding a button. Every a
 
 **Nobody edits their own `is_admin`/`active`, or deletes themselves** — separate from the rule above (this one applies even with other admins around): `update_user`/`delete_user` check `is_active_session` and reject touching those fields, or deleting, your own logged-in row. Granting/revoking a role or removing an account always takes a *different* admin acting on it. The frontend (`UserFormModal`, `UsersPage`) disables those controls for your own row too, so the backend rejection is a backstop, not the first line of defense.
 
-**Admin-authorization inside an in-progress action** (currently: discount in Venda) follows a shared pattern, `resolve_admin_authorization` (`guard.rs`): if the active session is already Admin, it self-authorizes with no extra password; otherwise it takes a *different* admin's id + password and re-verifies both against the DB (never trusting that the frontend already checked). The frontend (`DiscountModal`) only decides whether to *show* the password/admin-picker fields based on `user.isAdmin` — that's UX, not the boundary. Reuse this same helper for any future admin-gated in-sale action (e.g. cancel/estorno) instead of writing a parallel check.
+**Admin-authorization inside an in-progress action** (currently: discount in Venda) follows a shared pattern, `resolve_admin_authorization` (`guard.rs`): if the active session is already Admin, it self-authorizes with no extra password; otherwise it takes a *different* admin's id + password and re-verifies both against the DB (never trusting that the frontend already checked). The frontend (`DiscountModal`) only decides whether to *show* the password/admin-picker fields based on `user.isAdmin` — that's UX, not the boundary. Reuse this same helper for any future admin-gated in-sale action (e.g. cancel/estorno) instead of writing a parallel check. Full list of `guard.rs` helpers and the rationale behind each: `docs/architecture.md`.
 
 ## Money field rule
 
@@ -53,7 +71,7 @@ The **backend is the real access boundary**, not the UI hiding a button. Every a
 
 ## Versioning rule
 
-**When bumping the version, update all 3 files in sync** — they always need to match: `package.json` (`"version"`), `src-tauri/Cargo.toml` (`version`), `src-tauri/tauri.conf.json` (`"version"`).
+**When bumping the version, update all 3 files in sync** — they always need to match: `package.json` (`"version"`), `src-tauri/Cargo.toml` (`version`), `src-tauri/tauri.conf.json` (`"version"`). Bump-type rules (PATCH/MINOR/MAJOR) and exact line numbers: `docs/versioning.md`.
 
 ## Schema rule (`src-tauri/src/db.rs`)
 
@@ -89,6 +107,8 @@ If `pnpm install`/`pnpm build` complains about an ignored build script (esbuild)
 `cargo test` (inside `src-tauri/`): schema smoke test (`db::tests::schema_applies_cleanly`), `commands::users` tests (bcrypt hash roundtrip, `username` uniqueness, `slugify`, `unique_username`'s collision suffix, `is_last_active_admin`, `is_active_session` — the last one constructs a plain `AppState` directly, every field is `pub`, no Tauri runtime needed), and `commands::items` tests (`code_taken`'s duplicate check, `round2`'s float rounding) — all directly against an in-memory DB (`db::test_connection()`, `#[cfg(test)] pub(crate)`). These test the SQL/bcrypt/slug/guard logic, not the `#[tauri::command]`/`State<AppState>` plumbing itself (would need a running app to construct that). No frontend tests yet.
 
 ## Structure
+
+The tree below is a map, not the source of truth for what each piece does — before changing a page/component/command, check whether `docs/frontend.md`, `docs/architecture.md`, or `docs/commands.md` (see "Docs" at the top) already describes its current behavior, and update that doc as part of the same change if it doesn't match anymore.
 
 ```
 Stockly/
@@ -142,31 +162,22 @@ Stockly/
 │   ├── frontend.md               # routing, pages, key components, context/hooks
 │   ├── database.md               # full schema, table by table
 │   ├── commands.md               # every Tauri command, by domain, with signature
+│   ├── versioning.md             # SemVer bump rules, the 3 files kept in sync
 │   └── future.md                 # out-of-scope ideas/gaps — outlives Plans/PLANO.md
 └── icon-source.png / icon.ico    # master icon assets (see Environment notes)
 ```
 
-## Technical documentation
-
-| File | Content |
-|---|---|
-| [docs/architecture.md](docs/architecture.md) | Layers, data flow, `AppState`, session model, `guard.rs`, command module list |
-| [docs/frontend.md](docs/frontend.md) | Routing, pages, key components, context/hooks |
-| [docs/database.md](docs/database.md) | Full SQLite schema, table by table, with the design rationale behind each nullable/cascade/check |
-| [docs/commands.md](docs/commands.md) | Every Tauri command, by domain, with signature |
-| [docs/future.md](docs/future.md) | Ideas/gaps noticed along the way but out of scope for now — outlives `Plans/PLANO.md` |
-
-**What's implemented so far** lives in `Plans/PLANO.md`'s "Próximos passos" checklist (kept up to date there, not duplicated here) — until that file is retired once everything in it is built.
-
 ## Adding features
 
 ### New Rust command
+0. Check `docs/commands.md` for an existing pattern in the same domain (e.g. `resolve_admin_authorization` for anything admin-gated) before writing one from scratch.
 1. Write `#[tauri::command] pub fn name(...)` in `src-tauri/src/commands/<domain>.rs` (create a new file for a new domain, register it in `commands/mod.rs`).
 2. Register in `.invoke_handler(tauri::generate_handler![..., commands::<domain>::name])` in `lib.rs`.
 3. Add the corresponding typed wrapper in `src/lib/api.ts`.
+4. Add the command to its domain's table in `docs/commands.md`.
 
 ### New table/column
-See "Schema rule" above.
+See "Schema rule" above — also add the column to `docs/database.md`'s table-by-table breakdown in the same change.
 
 ### New dependency
 ```bash

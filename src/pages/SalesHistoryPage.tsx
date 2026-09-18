@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import type { SaleListItem, UserSummary } from "../lib/api";
-import { listAdmins, listSales } from "../lib/api";
+import { listAdmins, listSales, openReceiptFile, printFile, regenerateReceiptPdf } from "../lib/api";
 import { Card } from "../components/Card";
+import { ContextMenu, ContextMenuItem } from "../components/ContextMenu";
 import { Pagination } from "../components/Pagination";
 import { SaleDetailModal } from "../components/SaleDetailModal";
 import { PAYMENT_METHOD_LABEL, fmt, fmtDateTime, normalize } from "../lib/format";
@@ -27,8 +28,36 @@ export function SalesHistoryPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
   const [viewingSaleId, setViewingSaleId] = useState<number | null>(null);
+  const [actionMenu, setActionMenu] = useState<{ x: number; y: number; actions: ContextMenuItem[] } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[1]);
+
+  // Both actions regenerate the PDF fresh rather than trusting a path we
+  // might have cached — same reasoning as `ReceiptResultModal`'s `ensurePdf`:
+  // the file is cheap to re-render and may not exist yet (creation failed
+  // right after the sale, or the "recibos" folder was cleared).
+  async function handlePrintReceipt(sale: SaleListItem) {
+    setActionError(null);
+    try {
+      const path = await regenerateReceiptPdf(sale.id);
+      await printFile(path);
+    } catch (err) {
+      logger.error("falha ao imprimir recibo", sale.id, err);
+      setActionError("Não foi possível imprimir o recibo.");
+    }
+  }
+
+  async function handleOpenReceiptPdf(sale: SaleListItem) {
+    setActionError(null);
+    try {
+      const path = await regenerateReceiptPdf(sale.id);
+      await openReceiptFile(path);
+    } catch (err) {
+      logger.error("falha ao abrir PDF do recibo", sale.id, err);
+      setActionError("Não foi possível abrir o PDF do recibo.");
+    }
+  }
 
   function reloadList() {
     listSales()
@@ -118,6 +147,8 @@ export function SalesHistoryPage() {
         </select>
       </div>
 
+      {actionError && <p className="mb-3 text-xs text-danger">{actionError}</p>}
+
       <Card>
         <div className="-m-5 overflow-hidden">
           <table className="w-full text-sm">
@@ -128,8 +159,10 @@ export function SalesHistoryPage() {
                 <th className="px-5 py-3">Cliente</th>
                 <th className="px-5 py-3">Operador</th>
                 <th className="px-5 py-3">Pagamento</th>
-                <th className="px-5 py-3">Total</th>
+                <th className="px-5 py-3">Desconto</th>
+                <th className="px-5 py-3">Total Final</th>
                 <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -148,6 +181,7 @@ export function SalesHistoryPage() {
                   <td className="px-5 py-3 text-theme-1">{s.clientName ?? "—"}</td>
                   <td className="px-5 py-3 text-theme-1">{s.userName}</td>
                   <td className="px-5 py-3 text-theme-1">{PAYMENT_METHOD_LABEL[s.paymentMethod] ?? s.paymentMethod}</td>
+                  <td className="px-5 py-3 text-theme-3">{s.discountValue > 0 ? `-${fmt(s.discountValue)}` : "—"}</td>
                   <td className={`px-5 py-3 ${s.status === "cancelled" ? "text-theme-3 line-through" : "text-theme-1"}`}>
                     {fmt(s.total)}
                   </td>
@@ -158,11 +192,32 @@ export function SalesHistoryPage() {
                       <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold text-success">Concluída</span>
                     )}
                   </td>
+                  <td className="px-5 py-3 text-right">
+                    <button
+                      type="button"
+                      aria-label="Ações do recibo"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActionMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          actions: [
+                            { label: "Detalhe", onSelect: () => setViewingSaleId(s.id) },
+                            { label: "Imprimir recibo", onSelect: () => handlePrintReceipt(s) },
+                            { label: "Abrir PDF do recibo", onSelect: () => handleOpenReceiptPdf(s) },
+                          ],
+                        });
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-base leading-none text-theme-3 hover:bg-theme-hover-strong hover:text-theme-1"
+                    >
+                      ⋮
+                    </button>
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-6 text-center text-theme-3">
+                  <td colSpan={9} className="px-5 py-6 text-center text-theme-3">
                     Nenhuma venda encontrada.
                   </td>
                 </tr>
@@ -192,6 +247,10 @@ export function SalesHistoryPage() {
           onClose={() => setViewingSaleId(null)}
           onCancelled={reloadList}
         />
+      )}
+
+      {actionMenu && (
+        <ContextMenu x={actionMenu.x} y={actionMenu.y} items={actionMenu.actions} onClose={() => setActionMenu(null)} />
       )}
     </div>
   );

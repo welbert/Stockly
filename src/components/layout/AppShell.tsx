@@ -2,8 +2,10 @@ import { getVersion } from "@tauri-apps/api/app";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { NavigationGuardContext } from "../../context/NavigationGuardContext";
 import { getStoreName } from "../../lib/api";
 import { logger } from "../../logger";
+import { ConfirmModal } from "../ConfirmModal";
 import type { AuthGateOutletContext } from "./AuthGate";
 
 function formatCountdown(seconds: number): string {
@@ -18,7 +20,7 @@ function formatCountdown(seconds: number): string {
  * A ordem do array já reflete a ordem visual correta pros dois papéis —
  * ver comentário em "Adding features" do CLAUDE.md antes de reordenar. */
 const NAV_ITEMS = [
-  { to: "/venda", label: "Venda (PDV)", icon: "🛒", adminOnly: false, group: () => "Operação" },
+  { to: "/venda", label: "Venda", icon: "🛒", adminOnly: false, group: () => "Operação" },
   { to: "/", label: "Estoque", icon: "📦", adminOnly: false, group: () => "Operação" },
   { to: "/devedores", label: "Devedores", icon: "💳", adminOnly: false, group: () => "Operação" },
   { to: "/historico", label: "Histórico de vendas", icon: "🧾", adminOnly: false, group: () => "Operação" },
@@ -36,7 +38,7 @@ const NAV_ITEMS = [
  * ajustado ao que a tela realmente tem hoje. Some rota nova, some entrada aqui. */
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Estoque", subtitle: "Itens cadastrados e categorias" },
-  "/venda": { title: "Venda (PDV)", subtitle: "Registro rápido de venda, otimizado para teclado" },
+  "/venda": { title: "Venda", subtitle: "Registro rápido de venda, otimizado para teclado" },
   "/devedores": { title: "Devedores (Crediário)", subtitle: "Saldo em aberto, histórico de vendas fiado e pagamentos por cliente" },
   "/historico": { title: "Histórico de vendas", subtitle: "Busca por recibo, cliente ou operador, e cancelamento/estorno" },
   "/configuracoes": { title: "Configurações", subtitle: "Tema e bloqueio automático" },
@@ -50,6 +52,8 @@ export function AppShell() {
   const { secondsUntilLock } = useOutletContext<AuthGateOutletContext>();
   const [version, setVersion] = useState<string | null>(null);
   const [storeName, setStoreName] = useState("");
+  const [routeDirty, setRouteDirty] = useState(false);
+  const [pendingNav, setPendingNav] = useState<string | null>(null);
 
   useEffect(() => {
     getVersion()
@@ -105,6 +109,12 @@ export function AppShell() {
                   <NavLink
                     to={item.to}
                     end={item.to === "/"}
+                    onClick={(e) => {
+                      if (routeDirty && item.to !== pathname) {
+                        e.preventDefault();
+                        setPendingNav(item.to);
+                      }
+                    }}
                     className={({ isActive }) =>
                       `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm ${isActive ? "bg-sidebar-active text-white" : "hover:bg-sidebar-hover hover:text-white"}`
                     }
@@ -162,9 +172,27 @@ export function AppShell() {
           </header>
         )}
         <main className="min-h-0 flex-1 overflow-auto p-6">
-          <Outlet />
+          <NavigationGuardContext.Provider value={setRouteDirty}>
+            <Outlet />
+          </NavigationGuardContext.Provider>
         </main>
       </div>
+
+      {pendingNav && (
+        <ConfirmModal
+          title="Sair desta tela?"
+          message="Há uma ação em andamento aqui — saindo agora, o que já foi feito nesta tela será perdido."
+          confirmLabel="Sair mesmo assim"
+          danger
+          onConfirm={() => {
+            const to = pendingNav;
+            setRouteDirty(false);
+            setPendingNav(null);
+            navigate(to);
+          }}
+          onCancel={() => setPendingNav(null)}
+        />
+      )}
     </div>
   );
 }

@@ -77,6 +77,7 @@ pub fn run() {
             commands::receipts::regenerate_receipt_pdf,
             commands::receipts::print_file,
             commands::receipts::open_receipts_folder,
+            commands::receipts::open_receipt_file,
             commands::clients::list_clients,
             commands::clients::create_client,
             commands::clients::update_client,

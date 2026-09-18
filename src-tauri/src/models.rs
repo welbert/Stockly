@@ -141,6 +141,9 @@ pub struct SaleListItem {
     pub payment_method: String,
     pub total: f64,
     pub status: String,
+    /// Combined discount (item-level + general), i.e. gross total (no
+    /// discounts) minus `total` — `0.0` when the sale had none.
+    pub discount_value: f64,
 }
 
 /// A client ("devedor") with their computed Crediário balance — used both by

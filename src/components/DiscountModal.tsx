@@ -20,7 +20,7 @@ interface DiscountModalProps {
   /** Gross value the discount applies to — the absolute-value cap. */
   grossValue: number;
   current: { percent: number | null; amount: number | null };
-  /** `true` when the logged-in user isn't Admin and hasn't authorized any discount in this sale yet. */
+  /** `true` when the logged-in user isn't Admin — always asks for authorization, even after an earlier discount in the same sale was approved. */
   requiresAuth: boolean;
   admins: UserSummary[];
   onApply: (result: DiscountResult) => void;
@@ -29,9 +29,11 @@ interface DiscountModalProps {
 }
 
 /** Applies a discount (item or whole order), in % or R$ — asks for admin
- * authorization only when the logged-in user is a regular user and hasn't
- * authorized any discount in this sale yet (see `SalesPage`, which reuses
- * the same authorization for later discounts in the same sale). */
+ * authorization every time the logged-in user is a regular user, even if an
+ * earlier discount in the same sale was already authorized: one approval
+ * must never implicitly cover a later, possibly larger, discount the
+ * authorizing admin never saw. `SalesPage` keeps only the most recent
+ * authorizer to stamp the sale record when it's finalized. */
 export function DiscountModal({
   targetLabel,
   grossValue,
@@ -163,7 +165,7 @@ export function DiscountModal({
               className="w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
             />
           ) : (
-            <MoneyInput value={amount} onChange={setAmount} autoFocus />
+            <MoneyInput value={amount} onChange={setAmount} max={grossValue} autoFocus />
           )}
         </div>
 

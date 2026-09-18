@@ -96,4 +96,10 @@
     background: var(--theme-bg);
     color: var(--theme-1);
   }
+
+  /* Tailwind v4's preflight leaves <button> at the browser default (arrow)
+     cursor instead of pointer — restore it for every clickable button. */
+  button:not(:disabled) {
+    cursor: pointer;
+  }
 }
