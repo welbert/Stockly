@@ -84,6 +84,7 @@ pub fn run() {
             commands::sales::get_sale_detail,
             commands::sales::list_sales,
             commands::sales::list_sale_items_report,
+            commands::sales::list_sale_discounts,
             commands::reports::export_report_csv,
             commands::reports::export_report_pdf,
             commands::reports::open_containing_folder,

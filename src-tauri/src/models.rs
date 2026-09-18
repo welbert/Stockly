@@ -337,6 +337,39 @@ pub struct SaleItemReportRow {
     pub subtotal: f64,
 }
 
+/// One granted discount — either a sale's general discount or a single
+/// `sale_items` line's discount — powering `Relatórios > Descontos
+/// concedidos` (`commands::sales::list_sale_discounts`). A sale with both a
+/// general *and* one or more item-level discounts produces one row of each
+/// kind, not a single merged row: the mockup (`Plans/mockups-relatorios.html`,
+/// `descontos-concedidos`) shows one "Tipo" per row, and a sale's discounts
+/// can genuinely be of different kinds. `discountPercent`/`itemName` are left
+/// for the frontend to turn into the "Geral (10%)"/"Item (Nome, -15%)" label
+/// text, same reasoning as `SaleDetail` not pre-formatting money for display.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SaleDiscountRow {
+    /// Synthesized (`"general-{sale id}"` / `"item-{sale_items id}"`) — a
+    /// stable React key, not a real database id, same convention as
+    /// `AdminAuthorizationRow::id`.
+    pub id: String,
+    pub receipt_number: String,
+    pub created_at: String,
+    /// The cashier who made the sale — used only for the "operador" filter,
+    /// not shown as its own table column (matches the mockup).
+    pub user_name: String,
+    /// `"general"` | `"item"`.
+    pub kind: String,
+    /// `Some` only when `kind == "item"`.
+    pub item_name: Option<String>,
+    /// The original percent input, `None` when the discount was entered as a
+    /// fixed R$ amount instead.
+    pub discount_percent: Option<f64>,
+    /// Resolved discount value in reais, always positive.
+    pub amount: f64,
+    pub authorized_by_name: String,
+}
+
 /// One row of a sales CSV export, as it travels over the Tauri IPC (JSON,
 /// camelCase) — already shaped for display by the frontend (`toSaleCsvRows`
 /// in `src/lib/api.ts`: formatted date, payment method label, "Concluída"/

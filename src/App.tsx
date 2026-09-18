@@ -9,6 +9,7 @@ import { DevedoresPage } from "./pages/DevedoresPage";
 import { InventoryPage } from "./pages/InventoryPage";
 import { ReportPlaceholderPage } from "./pages/ReportPlaceholderPage";
 import { AutorizacoesAdminPage } from "./pages/reports/AutorizacoesAdminPage";
+import { DescontosConcedidosPage } from "./pages/reports/DescontosConcedidosPage";
 import { HistoricoPrecoPage } from "./pages/reports/HistoricoPrecoPage";
 import { InadimplenciaAgingPage } from "./pages/reports/InadimplenciaAgingPage";
 import { ItensParadosPage } from "./pages/reports/ItensParadosPage";
@@ -54,6 +55,7 @@ function App() {
                   <Route path="relatorios/vendas-forma-pagamento" element={<VendasPorFormaPagamentoPage />} />
                   <Route path="relatorios/vendas-operador" element={<VendasPorOperadorPage />} />
                   <Route path="relatorios/comparativo-periodos" element={<VendasComparativoPeriodosPage />} />
+                  <Route path="relatorios/descontos-concedidos" element={<DescontosConcedidosPage />} />
                   <Route path="relatorios/movimentacao-estoque" element={<MovimentacaoEstoquePage />} />
                   <Route path="relatorios/historico-preco" element={<HistoricoPrecoPage />} />
                   <Route path="relatorios/itens-parados" element={<ItensParadosPage />} />

@@ -1,7 +1,7 @@
 use super::clients::client_balance;
 use crate::csv_util;
 use crate::guard::{active_user_id, resolve_admin_authorization};
-use crate::models::{ReportPdfStatInput, SaleCsvRow, SaleDetail, SaleItemDetail, SaleItemInput, SaleItemReportRow, SaleListItem};
+use crate::models::{ReportPdfStatInput, SaleCsvRow, SaleDetail, SaleDiscountRow, SaleItemDetail, SaleItemInput, SaleItemReportRow, SaleListItem};
 use crate::money::{fmt_money, round2};
 use crate::pdf_util::{self, fmt_discount, ReportPdfStat, ReportPdfTable};
 use crate::AppState;
@@ -295,6 +295,89 @@ pub fn list_sale_items_report(state: State<AppState>) -> Result<Vec<SaleItemRepo
         })
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Every granted discount, general or item-level, on a `completed` sale —
+/// powers `Relatórios > Descontos concedidos`. `completed`-only (excludes
+/// `cancelled`) — same rule `commands::dashboard::get_dashboard_data`'s
+/// `discount_granted_month` already uses, since a discount on money that was
+/// given back shouldn't count towards "quanto foi concedido". Queried in two
+/// passes (general vs. item-level), same reasoning as
+/// `commands::audit::list_admin_authorizations`'s 3 separate queries: one
+/// `UNION` would need every column padded to the widest row anyway. Both
+/// passes share `discount_authorized_by_user_id` as the authorizer — a sale's
+/// discounts (general and/or per-item) are all covered by the single
+/// authorization `create_sale` resolves once via `resolve_admin_authorization`,
+/// there's no separate authorization per discount instance.
+#[tauri::command]
+pub fn list_sale_discounts(state: State<AppState>) -> Result<Vec<SaleDiscountRow>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    active_user_id(&state)?;
+
+    let mut rows = Vec::new();
+
+    let mut general_stmt = conn
+        .prepare(
+            "SELECT s.id, s.receipt_number, s.created_at, u.name, s.discount_percent, s.discount_amount, a.name
+             FROM sales s
+             JOIN users u ON u.id = s.user_id
+             JOIN users a ON a.id = s.discount_authorized_by_user_id
+             WHERE s.status = 'completed' AND s.discount_amount IS NOT NULL",
+        )
+        .map_err(|e| e.to_string())?;
+    let general_rows = general_stmt
+        .query_map([], |row| {
+            let sale_id: i64 = row.get(0)?;
+            Ok(SaleDiscountRow {
+                id: format!("general-{sale_id}"),
+                receipt_number: row.get(1)?,
+                created_at: row.get(2)?,
+                user_name: row.get(3)?,
+                kind: "general".into(),
+                item_name: None,
+                discount_percent: row.get(4)?,
+                amount: round2(row.get(5)?),
+                authorized_by_name: row.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    for row in general_rows {
+        rows.push(row.map_err(|e| e.to_string())?);
+    }
+
+    let mut item_stmt = conn
+        .prepare(
+            "SELECT si.id, s.receipt_number, s.created_at, u.name, si.item_name, si.discount_percent,
+                    (si.unit_price * si.quantity) - si.subtotal, a.name
+             FROM sale_items si
+             JOIN sales s ON s.id = si.sale_id
+             JOIN users u ON u.id = s.user_id
+             JOIN users a ON a.id = s.discount_authorized_by_user_id
+             WHERE s.status = 'completed' AND (si.discount_percent IS NOT NULL OR si.discount_amount IS NOT NULL)",
+        )
+        .map_err(|e| e.to_string())?;
+    let item_rows = item_stmt
+        .query_map([], |row| {
+            let sale_item_id: i64 = row.get(0)?;
+            Ok(SaleDiscountRow {
+                id: format!("item-{sale_item_id}"),
+                receipt_number: row.get(1)?,
+                created_at: row.get(2)?,
+                user_name: row.get(3)?,
+                kind: "item".into(),
+                item_name: Some(row.get(4)?),
+                discount_percent: row.get(5)?,
+                amount: round2(row.get(6)?),
+                authorized_by_name: row.get(7)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    for row in item_rows {
+        rows.push(row.map_err(|e| e.to_string())?);
+    }
+
+    rows.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(rows)
 }
 
 /// The actual on-disk shape of a sales CSV row — Portuguese headers via

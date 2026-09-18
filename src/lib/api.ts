@@ -445,6 +445,27 @@ export function listSaleItemsReport() {
   return call<SaleItemReportRow[]>("list_sale_items_report");
 }
 
+/** One granted discount (general or item-level) on a `completed` sale —
+ * powers `Relatórios > Descontos concedidos`. `userName` is only there for
+ * the "operador" filter, not a table column of its own (matches the
+ * mockup). Label text ("Geral (10%)"/"Item (Nome, -15%)") is built by the
+ * page from `kind`/`itemName`/`discountPercent`, not sent pre-formatted. */
+export type SaleDiscountRow = {
+  id: string;
+  receiptNumber: string;
+  createdAt: string;
+  userName: string;
+  kind: "general" | "item";
+  itemName: string | null;
+  discountPercent: number | null;
+  amount: number;
+  authorizedByName: string;
+};
+
+export function listSaleDiscounts() {
+  return call<SaleDiscountRow[]>("list_sale_discounts");
+}
+
 /** One row of a sales CSV export — already display-formatted (see
  * `toSaleCsvRows`), matching `src-tauri/src/models.rs`'s `SaleCsvRow`. */
 export type SaleCsvRow = {
