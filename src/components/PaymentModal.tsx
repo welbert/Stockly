@@ -42,9 +42,8 @@ interface PaymentModalProps {
 }
 
 /** Crediário is a payment method like any other, plus an inline step to
- * pick/add the client the debt goes to (see "Fluxo na venda" in
- * `Plans/PLANO.md`) — never leaves this modal, so the sale in progress is
- * never lost. */
+ * pick/add the client the debt goes to — never leaves this modal, so the
+ * sale in progress is never lost. */
 export function PaymentModal({ total, submitting, error, creditEnabled, onConfirm, onClose }: PaymentModalProps) {
   const methods = creditEnabled ? ALL_METHODS : ALL_METHODS.filter((m) => m.value !== "credit");
   const [method, setMethod] = useState<PaymentMethod>("cash");

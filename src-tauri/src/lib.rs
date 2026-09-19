@@ -22,10 +22,28 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // Must be the very first plugin registered (Tauri's own requirement) —
+    // desktop-only, so a second launch just focuses the already-running
+    // window instead of opening a second process. Without this, two
+    // processes could open `stockly.db` at once, each with its own
+    // `Mutex<Connection>` unaware of the other (`docs/architecture.md`
+    // already assumes single-instance as part of the `Mutex<Connection>`
+    // design — this is what actually enforces it).
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+    }));
+
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("sem diretório de dados do app");
             std::fs::create_dir_all(&data_dir).expect("falha ao criar diretório de dados");

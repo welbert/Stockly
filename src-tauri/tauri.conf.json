@@ -31,6 +31,12 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -38,5 +44,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVCQkJENzc1REExNThGMzAKUldRd2p4WGFkZGU3VzVNSlZ6Wm81MDFBV2M2a1U0T0JqNGNhemxiK1JMSGZRcmhvS2lldUphdWYK",
+      "endpoints": [
+        "https://github.com/welbert/Stockly/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

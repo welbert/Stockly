@@ -4,8 +4,8 @@ use crate::money::round2;
 use crate::AppState;
 use tauri::State;
 
-/// Every authorized admin action, from **3** of the 4 sources
-/// `Plans/PLANO.md`'s "Autorizações de Administrador" candidate names:
+/// Every authorized admin action, from **3** of the 4 originally-planned
+/// "Autorizações de Administrador" candidate names:
 /// desconto concedido (`sales.discount_authorized_by_user_id`), venda
 /// cancelada (`sales.cancel_authorized_by_user_id`) and pagamento de
 /// Crediário cancelado (`credit_payments.cancel_authorized_by_user_id`). The

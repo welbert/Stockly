@@ -16,7 +16,7 @@ const REPORT_HEADERS = ["Operador", "Nº de vendas", "Total vendido", "Ticket m�
 const REPORT_COLUMN_WEIGHTS = [4, 2, 3, 3];
 
 /** Simplest Relatórios screen so far — just the shared period toolbar and a
- * table, no chart (matches `Plans/mockups-relatorios.html`'s own layout for
+ * table, no chart (matches the original mockup's own layout for
  * this one, unlike the Vendas por categoria/item and forma de pagamento
  * screens which pair a donut with theirs). Computed client-side over
  * `listSales()` — `userName`/`total` are already there, no new backend data

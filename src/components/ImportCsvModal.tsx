@@ -150,9 +150,8 @@ interface ImportCsvModalProps {
 type Step = "pick" | "review" | "result";
 
 /** Admin-only CSV import flow: pick a file, review the classified rows
- * (novos/alterados/ausentes — see `Plans/PLANO.md`'s "Importação de CSV — tela
- * de resumo"), then apply. Nothing is written to the DB until "Aplicar
- * importação" — `previewItemsCsvImport` is read-only. */
+ * (novos/alterados/ausentes), then apply. Nothing is written to the DB until
+ * "Aplicar importação" — `previewItemsCsvImport` is read-only. */
 export function ImportCsvModal({ items, onClose, onImported }: ImportCsvModalProps) {
   const [step, setStep] = useState<Step>("pick");
   const [preview, setPreview] = useState<ItemsCsvImportPreview | null>(null);

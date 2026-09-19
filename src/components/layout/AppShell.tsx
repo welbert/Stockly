@@ -1,9 +1,9 @@
-import { getVersion } from "@tauri-apps/api/app";
 import { useEffect, useState, type MouseEvent } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { NavigationGuardContext } from "../../context/NavigationGuardContext";
 import { useToast } from "../../context/ToastContext";
+import { useUpdater } from "../../context/UpdaterContext";
 import { getStoreName, runBackup } from "../../lib/api";
 import { REPORT_GROUPS, findReport, reportPath } from "../../lib/reportsCatalog";
 import { logger } from "../../logger";
@@ -23,9 +23,9 @@ interface NavLinkItem {
   icon?: string;
 }
 
-/** A menu item that expands in place instead of navigating (see
- * `Plans/PLANO.md`'s "Menu lateral expansível") — `children` can themselves
- * be groups, so this nests to any depth. Built generic on purpose: Relatórios
+/** A menu item that expands in place instead of navigating ("Menu lateral
+ * expansível") — `children` can themselves be groups, so this nests to any
+ * depth. Built generic on purpose: Relatórios
  * is the first user, but any future menu with sub-screens (e.g. a "Cadastros"
  * group) reuses the same `NavItemRenderer` below instead of a bespoke toggle. */
 interface NavGroupItem {
@@ -88,10 +88,8 @@ const REPORT_PATH_PREFIX = "/relatorios/";
 /** `run_backup` is a no-op when no `backup_folder` is configured yet — see
  * that command's doc comment for why this fires regardless of which profile
  * is logged in, unlike every other backup command (Admin-only). Runs once on
- * mount, then every 10 minutes for as long as the app stays open
- * (`Plans/PLANO.md`'s "Backup do banco": deliberately more often than the
- * sibling CashVault project's "once per launch", since Stockly tends to stay
- * open a whole shift). */
+ * mount, then every 10 minutes for as long as the app stays open, since
+ * Stockly tends to stay open a whole shift. */
 const BACKUP_INTERVAL_MS = 10 * 60 * 1000;
 
 /** Whether `pathname` matches a link anywhere under this group, at any
@@ -188,18 +186,16 @@ export function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { secondsUntilLock } = useOutletContext<AuthGateOutletContext>();
-  const [version, setVersion] = useState<string | null>(null);
+  const { currentVersion } = useUpdater();
   const [storeName, setStoreName] = useState("");
   const [routeDirty, setRouteDirty] = useState(false);
   const [pendingNav, setPendingNav] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    getVersion()
-      .then(setVersion)
-      .catch((err) => logger.error("falha ao ler a versão do app", err));
-    // Fetched once per session (same as version) — a store name changed in
-    // Configurações only shows up here after the app restarts.
+    // A store name changed in Configurações only shows up here after the app
+    // restarts — fetched once per session, same as `currentVersion` above
+    // (`UpdaterProvider` fetches that one, shared instead of duplicated here).
     getStoreName()
       .then(setStoreName)
       .catch((err) => logger.error("falha ao ler nome da loja", err));
@@ -300,7 +296,7 @@ export function AppShell() {
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-sidebar-text">
-            <span>{version ? `Stockly - v${version}` : ""}</span>
+            <span>{currentVersion ? `Stockly - v${currentVersion}` : ""}</span>
             <button onClick={logout} className="text-sidebar-text hover:text-white">
               Sair
             </button>

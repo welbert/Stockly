@@ -14,9 +14,9 @@ interface RestoreBackupModalProps {
 }
 
 /** Restaurar backup: Admin-only page already gates *who* can reach this, so
- * this modal's own password field is the "Ações sensíveis" group 3
- * reconfirmation (`Plans/PLANO.md`) — a guard against an accidental click,
- * not authorizing a different person. `verifyPassword` checks the **active**
+ * this modal's own password field is the app's "ações sensíveis" group 3
+ * reconfirmation — a guard against an accidental click, not authorizing a
+ * different person. `verifyPassword` checks the **active**
  * session's own password (`user.id`), never an `authorizerId` picker like
  * `DiscountModal`'s group 1 flow. On success, `importBackup` overwrites the
  * live database file and the app relaunches right away to reopen it fresh —

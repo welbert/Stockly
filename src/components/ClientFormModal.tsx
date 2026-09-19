@@ -20,8 +20,8 @@ interface ClientFormModalProps {
 
 /** Same form used both by "+ Novo devedor" on the Devedores screen and
  * (inline, without this Modal around it) by the Crediário step in Venda — see
- * `PaymentModal`. No field here requires an admin password (see "Crediário e
- * Devedores" in `Plans/PLANO.md`) — **except** renaming a debtor who already
+ * `PaymentModal`. No field here requires an admin password — **except**
+ * renaming a debtor who already
  * has an open Crediário balance, which protects the debt ledger's identity
  * from an operator's mistake/abuse (same authorization pattern as
  * discount/cancel-sale/cancel-payment). */

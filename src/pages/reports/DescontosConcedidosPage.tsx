@@ -20,8 +20,8 @@ const REPORT_HEADERS = ["Recibo", "Tipo", "Valor", "Autorizado por", "Data"];
 const REPORT_COLUMN_WEIGHTS = [3, 4, 2, 3, 3];
 
 /** "Geral (10%)" / "Geral (R$ 2,00)" / "Item (Martelo, -15%)" — matches
- * `Plans/mockups-relatorios.html`'s "Tipo" column. Built here, not on the
- * backend, so money/percent formatting stays in one place (`format.ts`). */
+ * the original mockup's "Tipo" column. Built here, not on the backend, so
+ * money/percent formatting stays in one place (`format.ts`). */
 function discountLabel(r: SaleDiscountRow): string {
   const amountPart = r.discountPercent !== null ? `${r.discountPercent}%` : fmt(r.amount);
   if (r.kind === "general") return `Geral (${amountPart})`;

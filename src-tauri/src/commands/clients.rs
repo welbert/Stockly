@@ -90,8 +90,7 @@ pub fn list_clients(state: State<AppState>) -> Result<Vec<ClientSummary>, String
 }
 
 /// No admin required — registering a Crediário debtor (in Venda or in
-/// Devedores) is explicitly not a sensitive action (see `Plans/PLANO.md`,
-/// "Fluxo na venda").
+/// Devedores) is explicitly not a sensitive action.
 #[tauri::command]
 pub fn create_client(
     state: State<AppState>,

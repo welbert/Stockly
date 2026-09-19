@@ -533,8 +533,8 @@ pub fn export_items_csv(state: State<AppState>, path: String) -> Result<(), Stri
 }
 
 /// Admin-only, read-only — parses the CSV at `path` and classifies every row
-/// against the current DB (see `Plans/PLANO.md`'s "Importação de CSV — tela
-/// de resumo"), without writing anything. `code` is the match key; a row
+/// against the current DB ("Importação de CSV — tela de resumo"), without
+/// writing anything. `code` is the match key; a row
 /// whose code matches nothing falls back to an accent/case-insensitive name
 /// match as a *suggestion* only — the admin decides on the review screen
 /// (`apply_items_csv_import` is the only command that actually writes).

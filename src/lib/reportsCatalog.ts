@@ -2,15 +2,14 @@
  * report's title/subtitle — consumed by `AppShell` (nav tree), `App.tsx`
  * (route registration) and `ReportPlaceholderPage` (header/body text), so
  * adding a report is one entry here instead of three places kept in sync by
- * hand. Scope decided with the product owner (`Plans/PLANO.md`'s "Candidatos
- * a relatório"): the original 11, plus **Comparativo de períodos** and
- * **Descontos concedidos** (each added after the fact, on request —
- * considered important enough on its own to not wait) — the rest of that
- * list (Ticket médio, Vendas canceladas, Margem/lucro, Estoque valorizado,
- * Previsão de ruptura) is still deliberately left out of the menu until
- * prioritized. Every
- * report here is a blank placeholder screen (`ReportPlaceholderPage`) until
- * it gets its own route/component — most of Vendas already does. */
+ * hand. Scope decided with the product owner: the original 11, plus
+ * **Comparativo de períodos** and **Descontos concedidos** (each added after
+ * the fact, on request — considered important enough on its own to not
+ * wait) — a further candidate list (Ticket médio, Vendas canceladas,
+ * Margem/lucro, Estoque valorizado, Previsão de ruptura) is still
+ * deliberately left out of the menu until prioritized. Every report here has
+ * its own route/component now — `ReportPlaceholderPage` only ever renders
+ * for a slug that isn't in this catalog at all. */
 export interface ReportDef {
   slug: string;
   label: string;

@@ -36,8 +36,7 @@ function formatDigits(digits: string): string {
 /**
  * Campo de valor monetário: cada dígito digitado entra pela direita, como em
  * caixas eletrônicos/apps bancários — "1" vira R$ 0,01, mais um "0" vira R$ 0,10.
- * Use este componente em qualquer input de R$ do app para manter o comportamento idêntico
- * (mesmo padrão do MoneyInput do CashVault).
+ * Use este componente em qualquer input de R$ do app para manter o comportamento idêntico.
  */
 export function MoneyInput({ value, onChange, placeholder, autoFocus, id, className = "", warning, max }: Props) {
   const [digits, setDigits] = useState(() => centsToDigits(value));

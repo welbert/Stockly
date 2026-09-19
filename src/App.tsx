@@ -4,6 +4,7 @@ import { AuthGate } from "./components/layout/AuthGate";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ToastProvider } from "./context/ToastContext";
+import { UpdaterProvider } from "./context/UpdaterContext";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DevedoresPage } from "./pages/DevedoresPage";
 import { InventoryPage } from "./pages/InventoryPage";
@@ -38,41 +39,43 @@ function HomeRedirect() {
 function App() {
   return (
     <ToastProvider>
-      <AuthProvider>
-        <ThemeProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route element={<AuthGate />}>
-                <Route element={<AppShell />}>
-                  <Route index element={<HomeRedirect />} />
-                  <Route path="dashboard" element={<DashboardPage />} />
-                  <Route path="venda" element={<SalesPage />} />
-                  <Route path="estoque" element={<InventoryPage />} />
-                  <Route path="devedores" element={<DevedoresPage />} />
-                  <Route path="historico" element={<SalesHistoryPage />} />
-                  <Route path="relatorios/vendas-periodo" element={<VendasPorPeriodoPage />} />
-                  <Route path="relatorios/vendas-categoria-item" element={<VendasPorCategoriaItemPage />} />
-                  <Route path="relatorios/vendas-forma-pagamento" element={<VendasPorFormaPagamentoPage />} />
-                  <Route path="relatorios/vendas-operador" element={<VendasPorOperadorPage />} />
-                  <Route path="relatorios/comparativo-periodos" element={<VendasComparativoPeriodosPage />} />
-                  <Route path="relatorios/descontos-concedidos" element={<DescontosConcedidosPage />} />
-                  <Route path="relatorios/movimentacao-estoque" element={<MovimentacaoEstoquePage />} />
-                  <Route path="relatorios/historico-preco" element={<HistoricoPrecoPage />} />
-                  <Route path="relatorios/itens-parados" element={<ItensParadosPage />} />
-                  <Route path="relatorios/inadimplencia-aging" element={<InadimplenciaAgingPage />} />
-                  <Route path="relatorios/pagamentos-recebidos" element={<PagamentosRecebidosPage />} />
-                  <Route path="relatorios/pagamentos-cancelados" element={<PagamentosCanceladosPage />} />
-                  <Route path="relatorios/autorizacoes-admin" element={<AutorizacoesAdminPage />} />
-                  <Route path="relatorios/:slug" element={<ReportPlaceholderPage />} />
-                  <Route path="configuracoes" element={<SettingsPage />} />
-                  <Route path="usuarios" element={<UsersPage />} />
+      <UpdaterProvider>
+        <AuthProvider>
+          <ThemeProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route element={<AuthGate />}>
+                  <Route element={<AppShell />}>
+                    <Route index element={<HomeRedirect />} />
+                    <Route path="dashboard" element={<DashboardPage />} />
+                    <Route path="venda" element={<SalesPage />} />
+                    <Route path="estoque" element={<InventoryPage />} />
+                    <Route path="devedores" element={<DevedoresPage />} />
+                    <Route path="historico" element={<SalesHistoryPage />} />
+                    <Route path="relatorios/vendas-periodo" element={<VendasPorPeriodoPage />} />
+                    <Route path="relatorios/vendas-categoria-item" element={<VendasPorCategoriaItemPage />} />
+                    <Route path="relatorios/vendas-forma-pagamento" element={<VendasPorFormaPagamentoPage />} />
+                    <Route path="relatorios/vendas-operador" element={<VendasPorOperadorPage />} />
+                    <Route path="relatorios/comparativo-periodos" element={<VendasComparativoPeriodosPage />} />
+                    <Route path="relatorios/descontos-concedidos" element={<DescontosConcedidosPage />} />
+                    <Route path="relatorios/movimentacao-estoque" element={<MovimentacaoEstoquePage />} />
+                    <Route path="relatorios/historico-preco" element={<HistoricoPrecoPage />} />
+                    <Route path="relatorios/itens-parados" element={<ItensParadosPage />} />
+                    <Route path="relatorios/inadimplencia-aging" element={<InadimplenciaAgingPage />} />
+                    <Route path="relatorios/pagamentos-recebidos" element={<PagamentosRecebidosPage />} />
+                    <Route path="relatorios/pagamentos-cancelados" element={<PagamentosCanceladosPage />} />
+                    <Route path="relatorios/autorizacoes-admin" element={<AutorizacoesAdminPage />} />
+                    <Route path="relatorios/:slug" element={<ReportPlaceholderPage />} />
+                    <Route path="configuracoes" element={<SettingsPage />} />
+                    <Route path="usuarios" element={<UsersPage />} />
+                  </Route>
                 </Route>
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </BrowserRouter>
-        </ThemeProvider>
-      </AuthProvider>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </ThemeProvider>
+        </AuthProvider>
+      </UpdaterProvider>
     </ToastProvider>
   );
 }

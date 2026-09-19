@@ -41,7 +41,7 @@ const ITEM_HEADERS = ["Item", "Categoria", "Qtd. vendida", "Total"];
 const ITEM_COLUMN_WEIGHTS = [5, 4, 3, 3];
 
 /** Toggle between "Por categoria" (donut) and "Por item" (table sorted by
- * quantity) — same `Plans/mockups-relatorios.html` screen, one variant
+ * quantity) — same original mockup screen, one variant
  * switch instead of two separate reports. Needs line-item data `listSales()`
  * doesn't carry (category, quantity per item), hence `listSaleItemsReport()` —
  * see its own doc comment in `src-tauri/src/commands/sales.rs`. */

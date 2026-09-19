@@ -18,8 +18,8 @@ type SortBy = "reminder" | "name" | "balance";
 const HISTORY_PAGE_SIZE = 5;
 
 /** Reminders inside this window get the yellow "coming up" badge; anything
- * further out (or without a date) is plain text — v1 threshold, not spelled
- * out in `Plans/PLANO.md`. */
+ * further out (or without a date) is plain text — v1 threshold, picked here
+ * rather than dictated by spec. */
 const REMINDER_WARNING_DAYS = 7;
 
 function daysUntil(iso: string): number {

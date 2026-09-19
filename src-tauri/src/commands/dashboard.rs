@@ -214,8 +214,8 @@ fn credit_outstanding_total(conn: &Connection) -> Result<f64, String> {
 }
 
 /// Everything every Dashboard card needs, in one round-trip — see
-/// `DashboardData`. Admin-only (`Plans/PLANO.md`'s "Dashboard" section);
-/// every money/count figure keyed off "hoje"/"mês atual" uses local time
+/// `DashboardData`. Admin-only; every money/count figure keyed off
+/// "hoje"/"mês atual" uses local time
 /// (`'localtime'` in SQL, `chrono::Local` in Rust), matching how the rest of
 /// the app converts the UTC `created_at` columns for display.
 #[tauri::command]

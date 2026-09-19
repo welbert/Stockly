@@ -32,7 +32,7 @@ const REPORT_COLUMN_WEIGHTS = [3, 3, 3, 2, 3, 3, 3];
 
 /** Visão unificada de toda ação que precisou de autorização de Admin — ver
  * `commands::audit::list_admin_authorizations`'s doc comment pra exatamente
- * quais 3 das 4 fontes originais do `Plans/PLANO.md` entram aqui (a 4ª,
+ * quais 3 das 4 fontes originalmente planejadas entram aqui (a 4ª,
  * cliente renomeado, não é persistida hoje — `docs/future.md`). Filtro de
  * tipo (`typeFilter`) segue o mesmo padrão do `movementType` de
  * `MovimentacaoEstoquePage`. */

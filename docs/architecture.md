@@ -9,7 +9,7 @@ Frontend (React)  →  invoke() via src/lib/api.ts's call<T>()
                   →  rusqlite::Connection  →  stockly.db (SQLite file)
 ```
 
-Every command locks `AppState.db` (a `Mutex<Connection>` — single connection, single writer; this app runs as a single instance on one machine, not a networked multi-terminal PDV) and returns a plain `Result<T, String>`; errors always cross the IPC boundary as a string message, not a typed error enum.
+Every command locks `AppState.db` (a `Mutex<Connection>` — single connection, single writer; this app runs as a single instance on one machine, not a networked multi-terminal PDV) and returns a plain `Result<T, String>`; errors always cross the IPC boundary as a string message, not a typed error enum. The "single instance" half of that assumption is actually enforced, not just assumed: `tauri-plugin-single-instance` is registered first in `lib.rs`'s builder chain (desktop-only, `#[cfg(desktop)]`) — a second launch just focuses/unminimizes the already-running window instead of opening a second process, which would otherwise mean two `Mutex<Connection>`s on the same `stockly.db` file, each unaware of the other.
 
 ## Data directory
 
@@ -27,7 +27,7 @@ pub struct AppState {
 }
 ```
 
-`active_user_id` is the **in-memory session** — set by `commands::auth::login` (or by `create_user`'s first-run auto-login), cleared by `logout`. It is never persisted anywhere: a process restart always lands back on the login screen, unlike the sibling project's `config.last_active_user_id` "remembered profile" (deliberate — this is a shared PDV, not a single-user machine, so a password is required every time the app starts, not just once per install).
+`active_user_id` is the **in-memory session** — set by `commands::auth::login` (or by `create_user`'s first-run auto-login), cleared by `logout`. It is never persisted anywhere: a process restart always lands back on the login screen, no "remembered profile" (deliberate — this is a shared PDV, not a single-user machine, so a password is required every time the app starts, not just once per install).
 
 ## `src-tauri/src/guard.rs` — shared session/admin helpers
 

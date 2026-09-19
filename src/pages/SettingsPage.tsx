@@ -28,6 +28,7 @@ import { Checkbox } from "../components/Checkbox";
 import { RestoreBackupModal } from "../components/RestoreBackupModal";
 import { ThemeSwitcher } from "../components/ThemeSwitcher";
 import { useToast } from "../context/ToastContext";
+import { useUpdater } from "../context/UpdaterContext";
 import { logger } from "../logger";
 
 const AUTO_LOCK_OPTIONS: { value: number; label: string }[] = [
@@ -43,6 +44,8 @@ const AUTO_LOCK_OPTIONS: { value: number; label: string }[] = [
 export function SettingsPage() {
   const { user, setUser } = useAuth();
   const { showToast } = useToast();
+  const { currentVersion, checkNow } = useUpdater();
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [lowStockPercent, setLowStockPercentState] = useState<number | null>(null);
   const [profitMargin, setProfitMarginState] = useState<number | null>(null);
   const [storeName, setStoreNameState] = useState<string | null>(null);
@@ -143,6 +146,20 @@ export function SettingsPage() {
     }
   }
 
+  /** Manual counterpart of `UpdaterProvider`'s automatic startup check — same
+   * `checkNow()`, so a found update shows the exact same `UpdateModal`
+   * (shared `phase` state). Only this button's own "up to date" feedback is
+   * local — the automatic check stays silent when nothing's new. */
+  async function handleCheckUpdate() {
+    setCheckingUpdate(true);
+    try {
+      const found = await checkNow();
+      if (!found) showToast({ type: "success", title: "Você já está na versão mais recente" });
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }
+
   async function handleCreditEnabledChange(value: boolean) {
     try {
       await setCreditEnabled(value);
@@ -237,6 +254,13 @@ export function SettingsPage() {
         <p className="mt-2.5 text-xs text-theme-3">
           Caso o app apresente algum problema, os arquivos de log ficam aqui — encaminhe pra investigação.
         </p>
+
+        <div className="mt-4 border-t border-theme-border pt-4">
+          <p className="text-xs text-theme-3">Versão atual: {currentVersion ? `v${currentVersion}` : "—"}</p>
+          <Button variant="secondary" className="mt-2" onClick={handleCheckUpdate} disabled={checkingUpdate}>
+            {checkingUpdate ? "Verificando…" : "Verificar atualizações"}
+          </Button>
+        </div>
       </Card>
 
       {user.isAdmin && lowStockPercent !== null && (

@@ -727,8 +727,8 @@ export function listCreditPayments() {
   return call<CreditPaymentReportRow[]>("list_credit_payments");
 }
 
-/** One authorized admin action, from 3 of the 4 sources `Plans/PLANO.md`'s
- * "Autorizações de Administrador" originally listed — see
+/** One authorized admin action, from 3 of the 4 originally-planned
+ * "Autorizações de Administrador" sources — see
  * `commands::audit::list_admin_authorizations`'s doc comment for why the 4th
  * (cliente renomeado) isn't included yet. */
 export type AdminAuthorizationRow = {
@@ -822,9 +822,9 @@ export function getDashboardData() {
   return call<DashboardData>("get_dashboard_data");
 }
 
-/** Backup do banco (`Plans/PLANO.md`'s "Backup do banco") — Admin-only both
- * ways, except `runBackup`, which is called regardless of the active
- * profile (see `commands::backup::run_backup`'s doc comment for why). */
+/** Backup do banco — Admin-only both ways, except `runBackup`, which is
+ * called regardless of the active profile (see
+ * `commands::backup::run_backup`'s doc comment for why). */
 export function getBackupFolder() {
   return call<string | null>("get_backup_folder");
 }

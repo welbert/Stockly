@@ -19,8 +19,7 @@ fn set_config_value(conn: &Connection, key: &str, value: &str) -> Result<(), Str
 }
 
 /// Admin-only both ways — the whole "Backup" section of Configurações is
-/// invisible to Usuário comum, not just its restore button
-/// (`Plans/PLANO.md`'s "Backup do banco").
+/// invisible to Usuário comum, not just its restore button.
 #[tauri::command]
 pub fn get_backup_folder(state: State<AppState>) -> Result<Option<String>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
@@ -46,19 +45,18 @@ pub fn clear_backup_folder(state: State<AppState>) -> Result<(), String> {
 /// A no-op when no backup folder is configured yet. Unlike every setter
 /// above, **not** admin-gated — the frontend calls this once on app mount
 /// and then every 10 minutes for as long as the app stays open, regardless
-/// of which profile is logged in (`Plans/PLANO.md`'s "Backup do banco":
-/// unlike the sibling CashVault project, Stockly tends to stay open a whole
-/// shift with a Usuário comum at the register, so gating the timer to
-/// Admin-only sessions would leave most of the day unbacked-up). Still only
+/// of which profile is logged in — Stockly tends to stay open a whole shift
+/// with a Usuário comum at the register, so gating the timer to Admin-only
+/// sessions would leave most of the day unbacked-up. Still only
 /// `active_user_id`-gated, same as every other command, rather than wide
 /// open — it's just never *reachable* by Usuário comum through the UI, since
 /// only the Admin-only Configurações screen ever sets `backup_folder`.
 ///
-/// `VACUUM INTO`, not a raw `std::fs::copy` like CashVault's own
-/// `run_backup` — copying the file directly can produce an inconsistent
-/// backup while the active connection is in WAL mode (`-wal`/`-shm` files
-/// not reflected in a plain copy); `VACUUM INTO` is SQLite's own safe way to
-/// snapshot the currently-open database consistently.
+/// `VACUUM INTO`, not a raw `std::fs::copy` — copying the file directly can
+/// produce an inconsistent backup while the active connection is in WAL
+/// mode (`-wal`/`-shm` files not reflected in a plain copy); `VACUUM INTO`
+/// is SQLite's own safe way to snapshot the currently-open database
+/// consistently.
 #[tauri::command]
 pub fn run_backup(state: State<AppState>) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
@@ -72,8 +70,8 @@ pub fn run_backup(state: State<AppState>) -> Result<(), String> {
     }
     let dest = folder_path.join("stockly-backup.db");
     // `VACUUM INTO` refuses to overwrite a file that already exists — the
-    // fixed filename is deliberate (no version history, same as CashVault),
-    // so the previous backup is simply removed right before each run.
+    // fixed filename is deliberate (no version history), so the previous
+    // backup is simply removed right before each run.
     if dest.exists() {
         std::fs::remove_file(&dest).map_err(|e| e.to_string())?;
     }
@@ -82,8 +80,8 @@ pub fn run_backup(state: State<AppState>) -> Result<(), String> {
 }
 
 /// Overwrites the *entire* active database with `path`'s contents. Admin-only
-/// on top of the page itself already being Admin-only (`Plans/PLANO.md`'s
-/// "Ações sensíveis" group 3) — the frontend adds its own re-confirmation
+/// on top of the page itself already being Admin-only (the app's "ações
+/// sensíveis" group 3 pattern) — the frontend adds its own re-confirmation
 /// step (the admin's own password re-typed via `verify_password`) before
 /// even calling this, since it's destructive enough to warrant a guard
 /// against an accidental click, not just the right role.
@@ -111,7 +109,7 @@ pub fn import_backup(state: State<AppState>, path: String) -> Result<(), String>
 
     // Swaps the live connection for an in-memory one before overwriting the
     // on-disk file, since the app restarts right after this call to reopen
-    // the imported database fresh — same flow as CashVault's `import_backup`.
+    // the imported database fresh.
     let mut conn = state.db.lock().map_err(|e| e.to_string())?;
     *conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
     std::fs::copy(&source, &state.db_path).map_err(|e| e.to_string())?;

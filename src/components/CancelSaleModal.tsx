@@ -19,15 +19,15 @@ interface CancelSaleModalProps {
 }
 
 /** Cancels/estorna a completed sale — never deleted, just flipped to
- * `status: 'cancelled'` with who requested/authorized it (`Plans/PLANO.md`'s
- * "Cancelamento / Estorno de venda"). Returns stock and, for a Crediário sale,
+ * `status: 'cancelled'` with who requested/authorized it. Returns stock and,
+ * for a Crediário sale,
  * drops its own total off the client's balance (see `commands::sales::cancel_sale`) —
  * fetches the client's current balance (`getClientDetail`) just to spell out
  * the exact before/after in the confirmation text, same reasoning as
  * `CancelCreditPaymentModal`. Any amount already paid on this sale isn't
  * reversed — it becomes floating credit for the client, called out separately
  * when `sale.creditPaid` is set. No "motivo" field here, unlike cancelling a
- * Crediário payment, since PLANO.md doesn't ask for one on this action. */
+ * Crediário payment, this action doesn't ask for one. */
 export function CancelSaleModal({ sale, requiresAuth, admins, onCancelled, onClose }: CancelSaleModalProps) {
   const [adminId, setAdminId] = useState(admins[0]?.id ?? 0);
   const [password, setPassword] = useState("");

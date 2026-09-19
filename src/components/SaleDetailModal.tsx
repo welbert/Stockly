@@ -20,8 +20,8 @@ interface SaleDetailModalProps {
 
 /** "Ver venda" — opened from a debtor's history (Devedores screen) or from
  * Histórico de vendas. Shows "Cancelar/estornar venda" for a still-completed
- * sale (`Plans/PLANO.md`'s "Cancelamento / Estorno de venda"), or a banner
- * with who cancelled/authorized it once it's already been reversed. */
+ * sale, or a banner with who cancelled/authorized it once it's already been
+ * reversed. */
 export function SaleDetailModal({ saleId, admins, requiresAuth, onClose, onCancelled }: SaleDetailModalProps) {
   const [sale, setSale] = useState<SaleDetail | null>(null);
   const [error, setError] = useState<string | null>(null);

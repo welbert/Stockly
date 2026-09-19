@@ -31,10 +31,10 @@ type Props = {
   cardProps: DashboardCardProps;
 };
 
-/** Draggable/resizable card grid — same architecture as the sibling
- * CashVault project (`react-grid-layout` v2's `GridLayout` + `useContainerWidth`
- * for the screen-width delimiter, a catalog of "dumb" components, per-user
- * persisted layout, and an edit mode with an undo). See `docs/frontend.md`. */
+/** Draggable/resizable card grid (`react-grid-layout` v2's `GridLayout` +
+ * `useContainerWidth` for the screen-width delimiter, a catalog of "dumb"
+ * components, per-user persisted layout, and an edit mode with an undo).
+ * See `docs/frontend.md`. */
 export function DashboardGrid({ cardProps }: Props) {
   const { items, loading, editMode, enterEditMode, confirmEdit, cancelEdit, updateLayout, addCard, removeCard } = useDashboardLayout();
   const { width, containerRef, mounted } = useContainerWidth();

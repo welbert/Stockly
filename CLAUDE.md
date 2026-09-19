@@ -18,9 +18,9 @@ Consult before working in the relevant area. **Keep docs up to date:**
 | [docs/database.md](docs/database.md) | Full SQLite schema, table by table, with the design rationale behind each nullable/cascade/check |
 | [docs/commands.md](docs/commands.md) | Every Tauri command, by domain, with signature |
 | [docs/versioning.md](docs/versioning.md) | SemVer bump rules, the 3 files kept in sync |
-| [docs/future.md](docs/future.md) | Ideas/gaps noticed along the way but out of scope for now — outlives `Plans/PLANO.md` |
+| [docs/future.md](docs/future.md) | Ideas/gaps noticed along the way but out of scope for now |
 
-**What's implemented so far** lives in `Plans/PLANO.md`'s "Próximos passos" checklist (kept up to date there, not duplicated here) — until that file is retired once everything in it is built.
+The original product/business-rules spec and UI mockups (`Plans/PLANO.md`, `Plans/mockups-*.html`) have been removed now that everything in them is built — the `docs/*.md` files above are the current source of truth for behavior and design. Git history has the original spec/mockups if historical context is ever needed.
 
 ## Naming rule
 
@@ -28,14 +28,7 @@ Consult before working in the relevant area. **Keep docs up to date:**
 
 ## Language rule
 
-Code (identifiers), code comments, and everything in `docs/*.md` are always written in English (en-US) — this applies in both `src/` and `src-tauri/src/`, with no exception for a file that historically had Portuguese comments (fix it to English if you're the one touching it; don't go out of your way to retranslate untouched files). This is separate from the product's own language: end-user-facing UI text (labels, buttons, error messages) and `Plans/PLANO.md` (the business-rules spec, written for/by the Portuguese-speaking product owner) stay in Portuguese (pt-BR) — never translate those to English.
-
-## Planning source of truth
-
-- `Plans/PLANO.md` — full product/business-rules spec. Read the relevant section before implementing any feature; it's the authority for behavior and access rules, not this file.
-- `Plans/mockups-ui.html` — full UI mockup (Admin's view of every screen). Canonical visual reference: colors, layout, components, design tokens.
-- `Plans/mockups-ui-usuario.html` — same visual system, but only mocks the screens relevant to explain what Usuário comum sees (login, venda, estoque, autorizacao modal, recibo, config reduzida). **A screen missing here is not necessarily restricted** — some (e.g. Devedores) just weren't duplicated because they render identically for both roles. Check `PLANO.md` for the actual access rule per role, never infer a restriction from mockup absence alone.
-- Conflict resolution: business rules always come from `PLANO.md`. For visual details, if the two mockup files disagree on a screen both roles use identically, `mockups-ui.html` wins.
+Code (identifiers), code comments, and everything in `docs/*.md` are always written in English (en-US) — this applies in both `src/` and `src-tauri/src/`, with no exception for a file that historically had Portuguese comments (fix it to English if you're the one touching it; don't go out of your way to retranslate untouched files). This is separate from the product's own language: end-user-facing UI text (labels, buttons, error messages) stays in Portuguese (pt-BR) — never translate that to English.
 
 ## Theme rule (tokens + catalog)
 
@@ -59,7 +52,7 @@ The **backend is the real access boundary**, not the UI hiding a button. Every a
 
 ## Money field rule
 
-**Every R$ value input uses `MoneyInput`** (`src/components/MoneyInput.tsx`) — never a raw `<input type="number">`. Ported from the sibling project's component of the same name: each digit typed enters from the right, like a POS/ATM ("1" → R$ 0,01, one more "0" → R$ 0,10), rather than typing left-to-right and hoping the decimal point lands right. Its `value`/`onChange` are already a plain `number` in reais — no string parsing at the call site (see `ItemFormModal`'s `costPrice`/`salePrice`).
+**Every R$ value input uses `MoneyInput`** (`src/components/MoneyInput.tsx`) — never a raw `<input type="number">`. Each digit typed enters from the right, like a POS/ATM ("1" → R$ 0,01, one more "0" → R$ 0,10), rather than typing left-to-right and hoping the decimal point lands right. Its `value`/`onChange` are already a plain `number` in reais — no string parsing at the call site (see `ItemFormModal`'s `costPrice`/`salePrice`).
 
 ## Form-modal rule
 
@@ -112,10 +105,8 @@ The tree below is a map, not the source of truth for what each piece does — be
 
 ```
 Stockly/
-├── Plans/
-│   ├── PLANO.md                 # full spec — see "Planning source of truth" above
-│   ├── mockups-ui.html          # full/Admin mockup
-│   └── mockups-ui-usuario.html  # Usuário comum mockup (subset of screens)
+├── .github/
+│   └── workflows/release.yml    # builds + publishes to this repo's own Releases on a vX.Y.Z tag push — see "Autoupdate" in docs/versioning.md
 ├── src/
 │   ├── App.tsx                  # routes: AuthGate → AppShell → InventoryPage (index) / DashboardPage / SalesPage / SettingsPage / UsersPage
 │   ├── main.tsx                 # applies theme + disables right-click before render
@@ -166,7 +157,7 @@ Stockly/
 │   ├── database.md               # full schema, table by table
 │   ├── commands.md               # every Tauri command, by domain, with signature
 │   ├── versioning.md             # SemVer bump rules, the 3 files kept in sync
-│   └── future.md                 # out-of-scope ideas/gaps — outlives Plans/PLANO.md
+│   └── future.md                 # out-of-scope ideas/gaps
 ├── demo/
 │   ├── stockly-demonstration.db # seeded demo data (2 users, password 123456) — see demo/README.md
 │   └── README.md                # what's in it, login, how to regenerate
@@ -191,10 +182,10 @@ cd src-tauri && cargo add <crate>   # Rust
 pnpm add <package>                  # frontend (or pnpm add -D for dev)
 ```
 
-## Key decisions worth remembering (full detail in `Plans/PLANO.md`)
+## Key decisions worth remembering
 
-- Windows-only build target for now (NSIS installer, GitHub Actions on tag push, once autoupdate is implemented) — no macOS/Linux.
-- Autoupdate needs the GitHub repo to be **public** — the update endpoint (`.../releases/latest/download/latest.json`) must be reachable without auth.
+- Windows-only build target for now (NSIS installer, `.github/workflows/release.yml` builds and publishes on a `vX.Y.Z` tag push) — no macOS/Linux.
+- Autoupdate (`tauri-plugin-updater`) needs the GitHub repo to be **public** — the update endpoint (`.../releases/latest/download/latest.json`) must be reachable without auth. Single-repo, no separate releases repo. Signing key: `TAURI_SIGNING_PRIVATE_KEY`/`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` GitHub Secrets, public half in `src-tauri/tauri.conf.json`.
 - Sale receipt numbering: `{yyyyMMdd}{6-digit sequential}`, global and gap-free, assigned in the same DB transaction as the sale — never tied to PDF generation, which can fail independently after commit (receipt regeneration is a separate on-demand action).
 - Monetary math: floats, rounded to 2 decimals after each operation (small, accepted rounding drift on sequential item+order discounts).
 - Backup uses SQLite's `VACUUM INTO` (not a raw file copy) — a raw copy can be inconsistent with an active WAL-mode connection.

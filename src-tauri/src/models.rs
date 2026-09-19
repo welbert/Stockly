@@ -65,10 +65,9 @@ pub struct ItemSummary {
     pub active: bool,
 }
 
-/// One `stock_movements` ledger row, joined with its item/user names — the
-/// "consulta" screen `docs/database.md` registered as pending back when the
-/// table was created (`Plans/PLANO.md`'s "Histórico de movimentações de
-/// estoque"). `itemId` (not just `itemName`) travels too so a report can
+/// One `stock_movements` ledger row, joined with its item/user names — feeds
+/// `MovimentacaoEstoquePage` ("Histórico de movimentações de estoque").
+/// `itemId` (not just `itemName`) travels too so a report can
 /// group by item reliably (`VendasPorCategoriaItemPage`'s `SaleItemReportRow`
 /// groups by name instead only because `sale_items` snapshots the name and
 /// has no `item_id` guarantee across a deleted item — this table always has
@@ -145,8 +144,8 @@ pub struct ItemCsvFieldDiff {
 
 /// A CSV row whose code (or, as fallback, normalized name) matched no
 /// existing item — a candidate to create, unless the admin remaps it to an
-/// existing item on the review screen (see `Plans/PLANO.md`'s "Importação de
-/// CSV — tela de resumo").
+/// existing item on the review screen ("Importação de CSV — tela de
+/// resumo").
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemCsvNewRow {
@@ -348,9 +347,9 @@ pub struct SaleItemReportRow {
 /// `sale_items` line's discount — powering `Relatórios > Descontos
 /// concedidos` (`commands::sales::list_sale_discounts`). A sale with both a
 /// general *and* one or more item-level discounts produces one row of each
-/// kind, not a single merged row: the mockup (`Plans/mockups-relatorios.html`,
-/// `descontos-concedidos`) shows one "Tipo" per row, and a sale's discounts
-/// can genuinely be of different kinds. `discountPercent`/`itemName` are left
+/// kind, not a single merged row: the original mockup's
+/// `descontos-concedidos` screen shows one "Tipo" per row, and a sale's
+/// discounts can genuinely be of different kinds. `discountPercent`/`itemName` are left
 /// for the frontend to turn into the "Geral (10%)"/"Item (Nome, -15%)" label
 /// text, same reasoning as `SaleDetail` not pre-formatting money for display.
 #[derive(Serialize, Clone)]

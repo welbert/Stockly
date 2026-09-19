@@ -15,8 +15,8 @@ export function addDays(dateKey: string, delta: number): string {
 }
 
 /** Shared "Últimos 7 dias / Este mês / Personalizado" period picker — every
- * Vendas report in `Plans/mockups-relatorios.html` uses the same toolbar
- * select, so the state/range logic is built once here (paired with
+ * Vendas report uses the same toolbar select, so the state/range logic is
+ * built once here (paired with
  * `PeriodToolbar` for the matching UI) instead of copy-pasted per report. */
 export function usePeriodFilter() {
   const [preset, setPreset] = useState<PeriodPreset>("7d");

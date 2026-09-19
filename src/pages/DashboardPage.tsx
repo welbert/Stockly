@@ -5,7 +5,7 @@ import { DashboardGrid } from "../components/dashboard-cards/DashboardGrid";
 import { getDashboardData, DashboardData } from "../lib/api";
 import { logger } from "../logger";
 
-/** Admin-only (`Plans/PLANO.md`'s "Dashboard") — guards itself with a redirect
+/** Admin-only — guards itself with a redirect
  * since it's still reachable by URL even though the sidebar hides the link,
  * same pattern as `UsersPage`. */
 export function DashboardPage() {
