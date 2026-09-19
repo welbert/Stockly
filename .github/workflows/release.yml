@@ -12,23 +12,32 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Extract release notes for this tag
         id: notes
-        shell: powershell
+        # `pwsh` (PowerShell 7+), not Windows PowerShell 5.1 (`shell: powershell`)
+        # — 5.1 reads a script file with no BOM using the system's legacy ANSI
+        # codepage, not UTF-8, so any non-ASCII character typed literally in
+        # this block (the em dash below) gets corrupted before the regex ever
+        # runs. `pwsh` parses UTF-8 correctly regardless of BOM. Belt and
+        # suspenders: the em dash is still built from its code point
+        # (`[char]0x2014`) instead of typed literally, so this survives even
+        # if the shell ever changes back.
+        shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
+          $dash = [char]0x2014
           $content = Get-Content -Raw -Encoding UTF8 -Path "RELEASE.md"
-          $pattern = "(?ms)^# Stockly — $([regex]::Escape($tag))[ \t]*\r?\n(.*?)(?=^# Stockly — |\z)"
+          $pattern = "(?ms)^# Stockly $dash $([regex]::Escape($tag))[ \t]*\r?\n(.*?)(?=^# Stockly $dash |\z)"
           $match = [regex]::Match($content, $pattern)
           if (-not $match.Success) {
-            Write-Error "RELEASE.md has no '# Stockly — $tag' section — rename '# Stockly — Não lançado' to it in the version-bump commit before tagging (see docs/versioning.md's 'Bumping the version')."
+            Write-Error "RELEASE.md has no version section matching tag $tag - rename the 'Nao lancado' heading to it in the version-bump commit before tagging (see docs/versioning.md's Release checklist)."
             exit 1
           }
           $notes = $match.Groups[1].Value.Trim()
           if ([string]::IsNullOrWhiteSpace($notes)) {
-            $notes = "Sem notas de versão registradas para $tag."
+            $notes = "Sem notas de versao registradas para $tag."
           }
           $delimiter = "EOF_$([guid]::NewGuid().ToString('N'))"
           Add-Content -Path $env:GITHUB_OUTPUT -Encoding UTF8 -Value "notes<<$delimiter"
@@ -36,12 +45,12 @@ jobs:
           Add-Content -Path $env:GITHUB_OUTPUT -Encoding UTF8 -Value $delimiter
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v6
         with:
           version: 11
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: 'pnpm'
