@@ -86,7 +86,7 @@ pub(crate) fn config_string(conn: &Connection, key: &str) -> Result<String, Stri
     Ok(value.unwrap_or_default())
 }
 
-fn set_config_string(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
+pub(crate) fn set_config_string(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
     conn.execute(
         "INSERT INTO config (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         params![key, value],

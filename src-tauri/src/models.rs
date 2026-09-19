@@ -562,7 +562,20 @@ pub struct DashboardLayoutItem {
 pub struct LowStockItemSummary {
     pub name: String,
     pub quantity: i64,
-    pub min_quantity: i64,
+    /// `None` when this item has no minimum configured — it can still show
+    /// up here at `quantity == 0` (see `commands::dashboard::low_stock_candidates`).
+    pub min_quantity: Option<i64>,
+}
+
+/// The folder receipts PDFs are saved to, always resolved to an absolute
+/// path — `isCustom` is `false` when this is just the app's own default
+/// (`<pasta de dados do app>/recibos/`), `true` when an Admin picked a
+/// different one in Configurações. See `commands::receipts::receipts_dir`.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceiptsFolderInfo {
+    pub path: String,
+    pub is_custom: bool,
 }
 
 #[derive(Serialize, Clone)]

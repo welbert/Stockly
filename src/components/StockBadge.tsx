@@ -15,7 +15,11 @@ const TONE_CLASS: Record<StockStatus, string> = {
 };
 
 function explain(item: Pick<ItemSummary, "quantity" | "minQuantity">, status: StockStatus, lowStockPercent: number): string | null {
-  if (status === "ok" || item.minQuantity === null) return null;
+  if (status === "ok") return null;
+  // `stockStatus()` only returns non-"ok" with `minQuantity === null` for a
+  // zeroed item (the one case that alerts regardless of a minimum) — every
+  // other branch below is reachable only when `minQuantity` is actually set.
+  if (item.minQuantity === null) return "Estoque zerado.";
   if (item.quantity === 0) {
     return `Estoque zerado (mínima definida: ${item.minQuantity}).`;
   }

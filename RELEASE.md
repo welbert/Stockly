@@ -1,5 +1,14 @@
 # Stockly — Não lançado
 
+## Novidades
+
+- **Novidade:** Em Configurações → Recibo, agora dá pra escolher em qual pasta os recibos em PDF são salvos, em vez de usar sempre a pasta padrão do app.
+- **Novidade:** A tela "Venda concluída" ficou mais rápida de usar pelo teclado — em vez de três botões (Imprimir, Abrir pasta de recibos, Nova venda), agora é só uma pergunta: "Imprimir recibo?", com Não (Esc) ou Sim (Enter).
+
+## Correções
+
+- **Correção:** Item com estoque zerado, mas sem quantidade mínima configurada, não aparecia mais como "Sem estoque" (nem no Estoque, nem no card "Itens com estoque baixo" do Dashboard) — agora estoque zerado sempre alerta, mesmo sem mínima definida.
+
 # Stockly — v0.0.2
 
 ## Novidades

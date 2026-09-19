@@ -1,5 +1,6 @@
-use crate::commands::config::{config_string, DEFAULT_THANK_YOU_MESSAGE, RECEIPT_THANK_YOU_KEY, STORE_INFO_KEY, STORE_NAME_KEY};
-use crate::guard::active_user_id;
+use crate::commands::config::{config_string, set_config_string, DEFAULT_THANK_YOU_MESSAGE, RECEIPT_THANK_YOU_KEY, STORE_INFO_KEY, STORE_NAME_KEY};
+use crate::guard::{active_user_id, require_admin};
+use crate::models::ReceiptsFolderInfo;
 use crate::money::fmt_money;
 use crate::pdf_util::font_family;
 use crate::AppState;
@@ -10,9 +11,47 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::State;
 
-/// `<pasta de dados do app>/recibos/` — sibling of `stockly.db`, not inside it.
-pub(crate) fn receipts_dir(db_path: &Path) -> PathBuf {
-    db_path.parent().map(|p| p.join("recibos")).unwrap_or_else(|| PathBuf::from("recibos"))
+const RECEIPTS_FOLDER_KEY: &str = "receipts_folder";
+
+/// The configured folder (see `RECEIPTS_FOLDER_KEY`, set via Configurações)
+/// when there is one, otherwise `<pasta de dados do app>/recibos/` — sibling
+/// of `stockly.db`, not inside it. Reads `config` on every call rather than
+/// caching, same convention as every other config-backed setting.
+pub(crate) fn receipts_dir(conn: &Connection, db_path: &Path) -> Result<PathBuf, String> {
+    let configured = config_string(conn, RECEIPTS_FOLDER_KEY)?;
+    if !configured.is_empty() {
+        return Ok(PathBuf::from(configured));
+    }
+    Ok(db_path.parent().map(|p| p.join("recibos")).unwrap_or_else(|| PathBuf::from("recibos")))
+}
+
+/// Admin-only, matching the rest of the "Recibo" card in Configurações
+/// (store name/info/thank-you message) — both roles still print/generate
+/// receipts through whatever folder is configured, only *choosing* it is
+/// gated.
+#[tauri::command]
+pub fn get_receipts_folder(state: State<AppState>) -> Result<ReceiptsFolderInfo, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    require_admin(&state, &conn)?;
+    let is_custom = !config_string(&conn, RECEIPTS_FOLDER_KEY)?.is_empty();
+    let path = receipts_dir(&conn, &state.db_path)?;
+    Ok(ReceiptsFolderInfo { path: path.to_string_lossy().to_string(), is_custom })
+}
+
+#[tauri::command]
+pub fn set_receipts_folder(state: State<AppState>, path: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    require_admin(&state, &conn)?;
+    set_config_string(&conn, RECEIPTS_FOLDER_KEY, path.trim())
+}
+
+/// Reverts to the app's own default folder — same "empty means unset" convention
+/// `STORE_NAME_KEY`/`STORE_INFO_KEY` already use, not a deleted row like `backup_folder`.
+#[tauri::command]
+pub fn clear_receipts_folder(state: State<AppState>) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    require_admin(&state, &conn)?;
+    set_config_string(&conn, RECEIPTS_FOLDER_KEY, "")
 }
 
 /// `sales.created_at` is stored as SQLite's `datetime('now')`, which is UTC —
@@ -148,7 +187,8 @@ pub(crate) fn render_receipt_pdf(conn: &Connection, sale_id: i64, dir: &Path) ->
 pub fn regenerate_receipt_pdf(state: State<AppState>, sale_id: i64) -> Result<String, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     active_user_id(&state)?;
-    let path = render_receipt_pdf(&conn, sale_id, &receipts_dir(&state.db_path))?;
+    let dir = receipts_dir(&conn, &state.db_path)?;
+    let path = render_receipt_pdf(&conn, sale_id, &dir)?;
     Ok(path.to_string_lossy().to_string())
 }
 
@@ -171,8 +211,9 @@ pub fn print_file(state: State<AppState>, path: String) -> Result<(), String> {
 #[tauri::command]
 pub fn open_receipts_folder(app: tauri::AppHandle, state: State<AppState>) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
     active_user_id(&state)?;
-    let dir = receipts_dir(&state.db_path);
+    let dir = receipts_dir(&conn, &state.db_path)?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     app.opener().open_path(dir.to_string_lossy(), None::<String>).map_err(|e| e.to_string())
 }

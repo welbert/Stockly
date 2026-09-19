@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAuth } from "../context/AuthContext";
+import type { ReceiptsFolderInfo } from "../lib/api";
 import {
   clearBackupFolder,
+  clearReceiptsFolder,
   effectiveAutoLockMinutes,
   getBackupFolder,
   getCreditEnabled,
   getDefaultProfitMargin,
   getLowStockPercent,
   getReceiptThankYouMessage,
+  getReceiptsFolder,
   getStoreInfo,
   getStoreName,
   openLogDir,
@@ -18,6 +21,7 @@ import {
   setDefaultProfitMargin,
   setLowStockPercent,
   setReceiptThankYouMessage,
+  setReceiptsFolder,
   setStoreInfo,
   setStoreName,
   updateMyAutoLock,
@@ -54,6 +58,7 @@ export function SettingsPage() {
   const [creditEnabled, setCreditEnabledState] = useState<boolean | null>(null);
   const [backupFolder, setBackupFolderState] = useState<string | null | undefined>(undefined);
   const [restorePath, setRestorePath] = useState<string | null>(null);
+  const [receiptsFolder, setReceiptsFolderState] = useState<ReceiptsFolderInfo | null>(null);
 
   useEffect(() => {
     if (user?.isAdmin) {
@@ -78,6 +83,9 @@ export function SettingsPage() {
       getBackupFolder()
         .then(setBackupFolderState)
         .catch((err) => logger.error("falha ao ler pasta de backup", err));
+      getReceiptsFolder()
+        .then(setReceiptsFolderState)
+        .catch((err) => logger.error("falha ao ler pasta de recibos", err));
     }
   }, [user]);
 
@@ -205,6 +213,37 @@ export function SettingsPage() {
     } catch (err) {
       logger.error("falha ao desativar backup automático", err);
       showToast({ type: "error", title: "Não foi possível desativar o backup" });
+    }
+  }
+
+  async function handleChooseReceiptsFolder() {
+    let selected: string | string[] | null;
+    try {
+      selected = await open({ directory: true, multiple: false });
+    } catch (err) {
+      logger.error("falha ao selecionar pasta de recibos", err);
+      showToast({ type: "error", title: "Não foi possível abrir o seletor de pasta" });
+      return;
+    }
+    if (!selected || Array.isArray(selected)) return;
+    try {
+      await setReceiptsFolder(selected);
+      setReceiptsFolderState(await getReceiptsFolder());
+      showToast({ type: "success", title: "Pasta de recibos atualizada" });
+    } catch (err) {
+      logger.error("falha ao salvar pasta de recibos", selected, err);
+      showToast({ type: "error", title: "Não foi possível salvar a pasta de recibos" });
+    }
+  }
+
+  async function handleUseDefaultReceiptsFolder() {
+    try {
+      await clearReceiptsFolder();
+      setReceiptsFolderState(await getReceiptsFolder());
+      showToast({ type: "success", title: "Voltou a usar a pasta padrão de recibos" });
+    } catch (err) {
+      logger.error("falha ao voltar pra pasta padrão de recibos", err);
+      showToast({ type: "error", title: "Não foi possível voltar pra pasta padrão" });
     }
   }
 
@@ -385,6 +424,24 @@ export function SettingsPage() {
               />
               <p className="mt-1.5 text-xs text-theme-3">Aparece no rodapé do recibo, logo abaixo da forma de pagamento.</p>
             </>
+          )}
+
+          {receiptsFolder && (
+            <div className="mt-5 border-t border-theme-border pt-5">
+              <label className="mb-1.5 block text-xs font-semibold text-theme-3">Pasta dos recibos em PDF</label>
+              <p className="text-xs text-theme-3">Pasta atual: {receiptsFolder.path}</p>
+              <div className="mt-2 flex gap-2">
+                <Button variant="secondary" onClick={handleChooseReceiptsFolder}>
+                  {receiptsFolder.isCustom ? "Alterar pasta" : "Selecionar pasta"}
+                </Button>
+                {receiptsFolder.isCustom && (
+                  <Button variant="secondary" onClick={handleUseDefaultReceiptsFolder}>
+                    Usar pasta padrão
+                  </Button>
+                )}
+              </div>
+              <p className="mt-2.5 text-xs text-theme-3">Vale pra recibos novos a partir de agora — os já gerados continuam onde estavam.</p>
+            </div>
           )}
         </Card>
       )}

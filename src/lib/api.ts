@@ -137,9 +137,13 @@ export function lowStockWarningThreshold(minQuantity: number, lowStockPercent: n
   return Math.ceil(minQuantity * (1 + lowStockPercent / 100));
 }
 
-/** Crítico quando quantidade <= mínima; aviso na faixa acima, até
- * `lowStockWarningThreshold`; sem mínima definida, o item nunca alerta. */
+/** Critical when quantity <= minimum, **or when quantity is zero even with
+ * no minimum configured** — zeroed stock is always critical, regardless of
+ * whether the admin ever set a minimum for that item. Warning in the band
+ * above that, up to `lowStockWarningThreshold`; with no minimum configured
+ * and quantity > 0, the item never alerts. */
 export function stockStatus(item: Pick<ItemSummary, "quantity" | "minQuantity">, lowStockPercent: number): StockStatus {
+  if (item.quantity === 0) return "critical";
   if (item.minQuantity === null) return "ok";
   if (item.quantity <= item.minQuantity) return "critical";
   return item.quantity <= lowStockWarningThreshold(item.minQuantity, lowStockPercent) ? "warning" : "ok";
@@ -322,6 +326,23 @@ export function getReceiptThankYouMessage() {
 
 export function setReceiptThankYouMessage(message: string) {
   return call<void>("set_receipt_thank_you_message", { message });
+}
+
+/** `path` is always the resolved, absolute folder in use — the app's own
+ * default (`<pasta de dados do app>/recibos/`) when `isCustom` is `false`,
+ * an Admin-picked folder otherwise. */
+export type ReceiptsFolderInfo = { path: string; isCustom: boolean };
+
+export function getReceiptsFolder() {
+  return call<ReceiptsFolderInfo>("get_receipts_folder");
+}
+
+export function setReceiptsFolder(path: string) {
+  return call<void>("set_receipts_folder", { path });
+}
+
+export function clearReceiptsFolder() {
+  return call<void>("clear_receipts_folder");
 }
 
 /** `sale_price` sugerido = custo + margem — usado só ao cadastrar um item novo. */

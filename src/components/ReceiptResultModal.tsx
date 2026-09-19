@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SaleDetail } from "../lib/api";
-import { openReceiptsFolder, printFile, regenerateReceiptPdf } from "../lib/api";
+import { printFile, regenerateReceiptPdf } from "../lib/api";
 import { PAYMENT_METHOD_LABEL, fmt, fmtDateTime } from "../lib/format";
 import { Button } from "./Button";
 import { Kbd } from "./Kbd";
@@ -18,27 +18,36 @@ interface ReceiptResultModalProps {
 
 /** Result screen after finalizing a sale — same reference as the "Recibo (PDF)"
  * mockup. The PDF may not exist yet if generation failed right after commit
- * (the sale stays valid either way) — "Reimprimir/regenerar" covers that. */
+ * (the sale stays valid either way) — printing regenerates it on demand.
+ * Fully keyboard-driven by design: a single "Imprimir recibo?" Sim/Não
+ * question instead of separate Imprimir/Abrir pasta/Nova venda buttons —
+ * answering it *is* the last step, there's nothing left to do after either
+ * choice but start the next sale. */
 export function ReceiptResultModal({ sale, storeName, storeInfo, thankYouMessage, onNewSale }: ReceiptResultModalProps) {
   const [pdfPath, setPdfPath] = useState(sale.receiptPdfPath);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Modal's own Escape-to-close is off here (`dismissible={false}`, on
-  // purpose — no accidental click-outside dismissal of a finished sale), but
-  // Esc should still do *something* on this keyboard-first screen: since the
-  // sale already committed, there's nothing to lose by treating Esc the same
-  // as "Nova venda".
+  // purpose — no accidental click-outside dismissal of a finished sale).
+  // Neither key relies on a focused button's native Enter/Space activation
+  // (no `autoFocus` below) — both are handled here, once, so a single
+  // keypress can never double-fire through both this listener and a
+  // button's own native activation.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
         onNewSale();
+      } else if (e.key === "Enter") {
+        e.stopPropagation();
+        handlePrintAndContinue();
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onNewSale]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onNewSale, pdfPath, busy]);
 
   async function ensurePdf(): Promise<string | null> {
     if (pdfPath) return pdfPath;
@@ -57,24 +66,22 @@ export function ReceiptResultModal({ sale, storeName, storeInfo, thankYouMessage
     }
   }
 
-  async function handlePrint() {
+  /** "Sim" — the sale already committed either way, so a print failure stays
+   * on this screen (with the error shown) instead of silently moving on;
+   * only a successful print advances to "Nova venda" automatically. */
+  async function handlePrintAndContinue() {
+    if (busy) return;
     const path = await ensurePdf();
     if (!path) return;
+    setBusy(true);
     try {
       await printFile(path);
+      onNewSale();
     } catch (err) {
       logger.error("falha ao imprimir recibo", sale.id, err);
       setError("Não foi possível imprimir o recibo.");
-    }
-  }
-
-  async function handleOpenFolder() {
-    await ensurePdf();
-    try {
-      await openReceiptsFolder();
-    } catch (err) {
-      logger.error("falha ao abrir pasta de recibos", err);
-      setError("Não foi possível abrir a pasta de recibos.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -145,19 +152,16 @@ export function ReceiptResultModal({ sale, storeName, storeInfo, thankYouMessage
         <div className="mt-1 text-center">{thankYouMessage}</div>
       </div>
 
-      {!pdfPath && <p className="mt-2 text-xs text-warning">PDF ainda não gerado — será gerado ao abrir/imprimir.</p>}
+      {!pdfPath && !busy && <p className="mt-2 text-xs text-warning">PDF ainda não gerado — será gerado ao imprimir.</p>}
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button variant="secondary" onClick={handlePrint} disabled={busy}>
-          Imprimir
+      <div className="mt-4 flex items-center justify-center gap-3">
+        <span className="text-sm font-semibold text-theme-1">{busy ? "Imprimindo…" : "Imprimir recibo?"}</span>
+        <Button variant="secondary" onClick={onNewSale} disabled={busy}>
+          Não <Kbd>Esc</Kbd>
         </Button>
-        <Button variant="secondary" onClick={handleOpenFolder} disabled={busy}>
-          Abrir pasta de recibos
-        </Button>
-        <div className="flex-1" />
-        <Button variant="primary" autoFocus onClick={onNewSale}>
-          Nova venda <Kbd>Enter</Kbd> / <Kbd>Esc</Kbd>
+        <Button variant="primary" onClick={handlePrintAndContinue} disabled={busy}>
+          Sim <Kbd>Enter</Kbd>
         </Button>
       </div>
     </Modal>

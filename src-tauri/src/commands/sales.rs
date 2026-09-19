@@ -753,7 +753,8 @@ pub fn create_sale(
         sale_id
     };
 
-    let receipt_pdf_path = super::receipts::render_receipt_pdf(&conn, sale_id, &super::receipts::receipts_dir(&state.db_path))
+    let receipt_pdf_path = super::receipts::receipts_dir(&conn, &state.db_path)
+        .and_then(|dir| super::receipts::render_receipt_pdf(&conn, sale_id, &dir))
         .ok()
         .map(|p| p.to_string_lossy().to_string());
 

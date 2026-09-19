@@ -54,18 +54,23 @@ fn low_stock_threshold(min_quantity: i64, percent: i64) -> i64 {
 
 /// Every active item at/under its warning threshold, most critical (lowest
 /// quantity) first — `low_stock_count` is just this list's full length,
-/// `low_stock_items` is its first `LOW_STOCK_ITEMS_LIMIT`.
+/// `low_stock_items` is its first `LOW_STOCK_ITEMS_LIMIT`. A zeroed item
+/// always qualifies, even with no `min_quantity` set — same "zero is always
+/// critical, independent of a configured minimum" rule as `stockStatus()`
+/// in `src/lib/api.ts` — so the SQL can no longer filter out
+/// `min_quantity IS NULL` rows upfront, that filtering happens per-row below
+/// instead.
 fn low_stock_candidates(conn: &Connection, percent: i64) -> Result<Vec<LowStockItemSummary>, String> {
-    let mut stmt = conn
-        .prepare("SELECT name, quantity, min_quantity FROM items WHERE active = 1 AND min_quantity IS NOT NULL")
-        .map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT name, quantity, min_quantity FROM items WHERE active = 1").map_err(|e| e.to_string())?;
     let rows: Vec<LowStockItemSummary> = stmt
         .query_map([], |row| Ok(LowStockItemSummary { name: row.get(0)?, quantity: row.get(1)?, min_quantity: row.get(2)? }))
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
-    let mut candidates: Vec<LowStockItemSummary> =
-        rows.into_iter().filter(|item| item.quantity <= low_stock_threshold(item.min_quantity, percent)).collect();
+    let mut candidates: Vec<LowStockItemSummary> = rows
+        .into_iter()
+        .filter(|item| item.quantity == 0 || item.min_quantity.is_some_and(|min| item.quantity <= low_stock_threshold(min, percent)))
+        .collect();
     candidates.sort_by_key(|item| item.quantity);
     Ok(candidates)
 }
