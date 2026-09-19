@@ -1,4 +1,6 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { UpdatePhase } from "../context/UpdaterContext";
+import { logger } from "../logger";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 
@@ -8,9 +10,25 @@ interface UpdateModalProps {
   onDismiss: () => void;
 }
 
+const RELEASES_URL = "https://github.com/welbert/Stockly/releases";
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** Opens the Releases page (system browser), not just the newest version's
+ * own notes — the update check only ever compares against the *latest*
+ * endpoint, so someone jumping several versions at once (e.g. still on
+ * v1, updating straight to v3) would never see what changed in v2 if this
+ * only showed the current `Update.body`. The full Releases page always has
+ * everything since whatever version they're coming from. */
+async function handleOpenReleaseNotes() {
+  try {
+    await openUrl(RELEASES_URL);
+  } catch (err) {
+    logger.error("falha ao abrir notas de atualização", err);
+  }
 }
 
 /** Autoupdate's UI — `"available"` is the only dismissible phase ("Depois"
@@ -59,13 +77,18 @@ export function UpdateModal({ phase, onConfirm, onDismiss }: UpdateModalProps) {
           </div>
         </div>
       ) : (
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="secondary" onClick={onDismiss}>
-            Depois
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <Button variant="ghost" onClick={handleOpenReleaseNotes}>
+            Notas de atualização
           </Button>
-          <Button variant="primary" onClick={onConfirm}>
-            Atualizar agora
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={onDismiss}>
+              Depois
+            </Button>
+            <Button variant="primary" onClick={onConfirm}>
+              Atualizar agora
+            </Button>
+          </div>
         </div>
       )}
     </Modal>

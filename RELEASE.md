@@ -1,5 +1,11 @@
 # Stockly — Não lançado
 
+# Stockly — v0.0.2
+
+## Novidades
+
+- **Novidade:** O aviso de atualização disponível agora tem um botão "Notas de atualização", que abre a página de releases no navegador — assim dá pra ver tudo que mudou desde a sua versão atual, mesmo pulando mais de uma versão de uma vez.
+
 # Stockly — v0.0.1
 
 ## Novidades
