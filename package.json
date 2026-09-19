@@ -2,7 +2,7 @@
   "name": "stockly",
   "packageManager": "pnpm@11.6.0",
   "private": true,
-  "version": "0.0.2",
+  "version": "0.0.3",
   "type": "module",
   "scripts": {
     "dev": "vite",

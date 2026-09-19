@@ -1,5 +1,7 @@
 # Stockly — Não lançado
 
+# Stockly — v0.0.3
+
 ## Novidades
 
 - **Novidade:** Em Configurações → Recibo, agora dá pra escolher em qual pasta os recibos em PDF são salvos, em vez de usar sempre a pasta padrão do app.
