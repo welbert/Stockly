@@ -45,9 +45,11 @@ jobs:
           Add-Content -Path $env:GITHUB_OUTPUT -Encoding UTF8 -Value $delimiter
 
       - name: Setup pnpm
+        # No `version:` input — pnpm/action-setup v4+ errors on a mismatch
+        # between this input and package.json's own `packageManager` field
+        # (which already pins `pnpm@11.6.0`); the action reads that field on
+        # its own when no version is given here.
         uses: pnpm/action-setup@v6
-        with:
-          version: 11
 
       - name: Setup Node
         uses: actions/setup-node@v5
