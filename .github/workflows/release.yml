@@ -14,6 +14,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Extract release notes for this tag
+        id: notes
+        shell: powershell
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $content = Get-Content -Raw -Encoding UTF8 -Path "RELEASE.md"
+          $pattern = "(?ms)^# Stockly — $([regex]::Escape($tag))[ \t]*\r?\n(.*?)(?=^# Stockly — |\z)"
+          $match = [regex]::Match($content, $pattern)
+          if (-not $match.Success) {
+            Write-Error "RELEASE.md has no '# Stockly — $tag' section — rename '# Stockly — Não lançado' to it in the version-bump commit before tagging (see docs/versioning.md's 'Bumping the version')."
+            exit 1
+          }
+          $notes = $match.Groups[1].Value.Trim()
+          if ([string]::IsNullOrWhiteSpace($notes)) {
+            $notes = "Sem notas de versão registradas para $tag."
+          }
+          $delimiter = "EOF_$([guid]::NewGuid().ToString('N'))"
+          Add-Content -Path $env:GITHUB_OUTPUT -Encoding UTF8 -Value "notes<<$delimiter"
+          Add-Content -Path $env:GITHUB_OUTPUT -Encoding UTF8 -Value $notes
+          Add-Content -Path $env:GITHUB_OUTPUT -Encoding UTF8 -Value $delimiter
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
@@ -51,6 +72,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Bora Vender ${{ github.ref_name }}'
+          releaseBody: ${{ steps.notes.outputs.notes }}
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true

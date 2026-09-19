@@ -66,6 +66,18 @@ The **backend is the real access boundary**, not the UI hiding a button. Every a
 
 **When bumping the version, update all 3 files in sync** — they always need to match: `package.json` (`"version"`), `src-tauri/Cargo.toml` (`version`), `src-tauri/tauri.conf.json` (`"version"`). Bump-type rules (PATCH/MINOR/MAJOR) and exact line numbers: `docs/versioning.md`.
 
+**When the user asks to close/publish a version** ("fecha a versão", "publica a 0.0.2", "lança a próxima versão", etc.) — follow `docs/versioning.md`'s "Release checklist" end-to-end, including the final `git push` of the tag (pre-authorized, no need to confirm before that push specifically) — that checklist is the full sequence, this rule is just the pointer to it.
+
+## Release Notes rule (`RELEASE.md`)
+
+After every user-facing feature or fix, append an entry to `RELEASE.md` (repo root) under the current version section, grouped under `## Novidades` / `## Correções` (only add the subheading that section actually has entries for — e.g. a fix-only version gets just `## Correções`):
+- `**Novidade:**` for new functionality, under `## Novidades`
+- `**Correção:**` for a bug fix, under `## Correções`
+
+**Written for the store owner, not a developer** — plain Portuguese (pt-BR), what changed from their point of view ("agora dá pra exportar o recibo em PDF..."), never implementation details (no file/table/function names, no internal architecture). Skip anything with no visible effect on the app (refactors, doc updates, dev tooling, test coverage).
+
+If the current version's section doesn't exist yet, create it at the top of the file as `# Stockly — Não lançado`. It gets renamed to the actual version number (`# Stockly — vX.Y.Z`) only in the release commit that bumps the version — see `docs/versioning.md`'s "Release checklist". `.github/workflows/release.yml` extracts that section's content straight into the published GitHub Release's notes when the matching tag is pushed, so a missing/unrenamed section fails the release build loudly instead of publishing with empty notes.
+
 ## Schema rule (`src-tauri/src/db.rs`)
 
 Every new table/column goes in **two places**: the `CREATE TABLE` inside `init_db` (fresh install) and an idempotent `ALTER TABLE` inside `migrate_db` (existing databases). A `CREATE INDEX` on a new column can only live in `migrate_db`, never appended to `init_db`'s `CREATE TABLE IF NOT EXISTS` — if the table already existed, that statement is a no-op and the column won't be there yet. First real `migrate_db` entry: `users.last_login_at`, added after real installs already existed — a plain example to copy the shape of, not an edit to `init_db`'s `CREATE TABLE`. Full schema, column-by-column, in [docs/database.md](docs/database.md).
