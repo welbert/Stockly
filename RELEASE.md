@@ -8,6 +8,7 @@
 - **Novidade:** Cadastro de cliente ganhou data de nascimento e CPF/CNPJ (com validação), além dos campos que já existiam.
 - **Novidade:** Em Configurações, novo grupo "Acessibilidade" com opção de aumentar ou diminuir o tamanho da fonte do app — preferência salva no seu perfil.
 - **Novidade:** Em Configurações, dá pra escolher com quantos dígitos o código automático de um item novo é gerado (ex.: "0001") — só afeta o código gerado automaticamente quando o campo é deixado em branco, nunca um código digitado à mão.
+- **Novidade:** Tela de Configurações reorganizada em grupos recolhíveis (Perfil e aparência, Loja e recibo, Estoque e precificação, Backup e restauração, Sistema e diagnóstico), com um campo de busca no topo que acha qualquer configuração pelo nome sem precisar saber em qual grupo ela está.
 
 # Stockly — v0.0.3
 
