@@ -208,6 +208,10 @@ pub fn regenerate_receipt_pdf(state: State<AppState>, sale_id: i64) -> Result<St
 /// Fire-and-forget (`spawn`, not `output`) same as v1: SumatraPDF hands the
 /// job to the print spooler and exits immediately with `-print-to`/
 /// `-print-to-default`, there's nothing further to wait on here.
+/// `-print-settings "portrait"` forces portrait regardless of the printer
+/// driver's own default/last-used orientation — both receipts (80mm-wide
+/// roll) and reports (A4, `pdf_util.rs`) are always authored portrait, so
+/// this is safe to hardcode rather than derive per document.
 #[tauri::command]
 pub fn print_file(app: tauri::AppHandle, state: State<AppState>, path: String) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
@@ -224,7 +228,7 @@ pub fn print_file(app: tauri::AppHandle, state: State<AppState>, path: String) -
     } else {
         cmd.args(["-print-to", &printer_name]);
     }
-    cmd.args(["-silent", &path]);
+    cmd.args(["-print-settings", "portrait", "-silent", &path]);
     cmd.spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
