@@ -1,3 +1,4 @@
+use super::audit::{self, AuditEntry};
 use crate::guard::{active_user_id, require_admin};
 use crate::models::{UserProfile, UserSummary, USER_PROFILE_COLUMNS};
 use crate::AppState;
@@ -234,6 +235,52 @@ pub fn update_user(
     )
     .map_err(|e| e.to_string())?;
     fetch_profile(&conn, id)
+}
+
+/// Admin-only: sets a **different** user's — or, deliberately, the acting
+/// admin's own — password directly, no old password required. The only way
+/// back in for someone who forgot theirs (`docs/future.md`'s "Reset another
+/// user's password" gap); also doubles as the only self-service password
+/// change there is, since nothing else in the app lets *anyone* change a
+/// password after account creation. Self-reset is allowed on purpose, unlike
+/// `update_user`'s `is_admin`/`active` fields: those carry real integrity
+/// risk (locking yourself out, losing the last Admin), a password doesn't.
+///
+/// No `resolve_admin_authorization` two-admin flow here — `UsersPage` is
+/// already Admin-only, so the acting admin always self-authorizes; logged to
+/// `audit_log` as `password_reset` all the same, `requested_by`/
+/// `authorized_by` both the acting admin.
+#[tauri::command]
+pub fn reset_user_password(state: State<AppState>, id: i64, new_password: String) -> Result<(), String> {
+    let mut conn = state.db.lock().map_err(|e| e.to_string())?;
+    let admin_id = require_admin(&state, &conn)?;
+    if new_password.trim().is_empty() {
+        return Err("Senha não pode ser vazia".to_string());
+    }
+    conn.query_row("SELECT 1 FROM users WHERE id = ?1", params![id], |_| Ok(())).map_err(|_| "Usuário não encontrado".to_string())?;
+    let hash = bcrypt::hash(&new_password, bcrypt::DEFAULT_COST).map_err(|e| e.to_string())?;
+
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute("UPDATE users SET password_hash = ?1 WHERE id = ?2", params![hash, id]).map_err(|e| e.to_string())?;
+    audit::record(
+        &tx,
+        AuditEntry {
+            // `reference` stays null — the target's name already reaches the
+            // report through `clientName` (`COALESCE(c.name, tu.name)` in
+            // `list_admin_authorizations`), and `reference`'s column renders
+            // as a `<code>` chip on the frontend (built for a receipt
+            // number), which would look wrong for a person's name.
+            action_type: "password_reset",
+            reference: None,
+            client_id: None,
+            target_user_id: Some(id),
+            amount: None,
+            requested_by_user_id: admin_id,
+            authorized_by_user_id: admin_id,
+        },
+    )?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Hard delete (not deactivate) — Admin-only. Fails on a foreign key

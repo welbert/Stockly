@@ -170,7 +170,30 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             visible  INTEGER NOT NULL DEFAULT 1,
             UNIQUE(user_id, card_key)
         );
-        CREATE INDEX IF NOT EXISTS idx_dashboard_layout_user ON dashboard_layout(user_id);",
+        CREATE INDEX IF NOT EXISTS idx_dashboard_layout_user ON dashboard_layout(user_id);
+
+        -- Append-only trail of every admin-authorized action — discount,
+        -- cancelamento de venda, cancelamento de pagamento de Crediário,
+        -- redefinição de senha. `client_id`/`target_user_id` are mutually
+        -- exclusive per action type (a client for the first 3, the affected
+        -- user for password_reset) — see `commands::audit`'s doc comment for
+        -- how the two get merged into one `clientName` field over IPC.
+        -- `requested_by_user_id`/`authorized_by_user_id` are equal whenever
+        -- the acting admin authorized their own action, same as
+        -- `sales.discount_authorized_by_user_id` always has for a
+        -- self-authorized discount.
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            action_type           TEXT    NOT NULL CHECK (action_type IN ('discount', 'sale_cancel', 'payment_cancel', 'password_reset')),
+            reference             TEXT    NULL,
+            client_id             INTEGER NULL REFERENCES clients(id),
+            target_user_id        INTEGER NULL REFERENCES users(id),
+            amount                REAL    NULL,
+            requested_by_user_id  INTEGER NOT NULL REFERENCES users(id),
+            authorized_by_user_id INTEGER NOT NULL REFERENCES users(id),
+            created_at            TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);",
     )
 }
 
@@ -276,6 +299,54 @@ fn migrate_db(conn: &Connection) {
          CREATE INDEX IF NOT EXISTS idx_credit_payments_cancel_authorized_by
              ON credit_payments(cancel_authorized_by_user_id) WHERE cancel_authorized_by_user_id IS NOT NULL;",
     );
+
+    let _ = conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS audit_log (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            action_type           TEXT    NOT NULL CHECK (action_type IN ('discount', 'sale_cancel', 'payment_cancel', 'password_reset')),
+            reference             TEXT    NULL,
+            client_id             INTEGER NULL REFERENCES clients(id),
+            target_user_id        INTEGER NULL REFERENCES users(id),
+            amount                REAL    NULL,
+            requested_by_user_id  INTEGER NOT NULL REFERENCES users(id),
+            authorized_by_user_id INTEGER NOT NULL REFERENCES users(id),
+            created_at            TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);",
+    );
+
+    // One-time backfill from the 3 sources that predate this table (desconto
+    // concedido, venda cancelada, pagamento de Crediário cancelado — see
+    // `docs/future.md`'s "Auditoria" section). Guarded by "has audit_log ever
+    // held a row" instead of being unconditionally re-runnable like the rest
+    // of this function: every live authorized action now also writes here
+    // directly, inline with the action itself (`commands::audit::record`,
+    // called from `commands::sales`/`commands::clients`/`commands::users`),
+    // so the *only* reason this SELECT ever needs to run again is to catch
+    // historical rows from before `audit_log` existed — and once either this
+    // backfill or a single live write has landed one row, that job is done
+    // for good. Deliberately not an idempotent `INSERT OR IGNORE` left
+    // running forever instead: this app has never needed a "did this
+    // one-time step already run" tracking mechanism beyond a plain existence
+    // check, and it doesn't start needing one for this.
+    let seeded: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM audit_log)", [], |row| row.get(0)).unwrap_or(true);
+    if !seeded {
+        let _ = conn.execute_batch(
+            "INSERT INTO audit_log (action_type, reference, client_id, requested_by_user_id, authorized_by_user_id, amount, created_at)
+             SELECT 'discount', s.receipt_number, s.client_id, s.user_id, s.discount_authorized_by_user_id,
+                    ROUND(COALESCE((SELECT SUM(si.unit_price * si.quantity) FROM sale_items si WHERE si.sale_id = s.id), 0) - s.total, 2),
+                    s.discount_authorized_at
+             FROM sales s WHERE s.discount_authorized_by_user_id IS NOT NULL;
+
+             INSERT INTO audit_log (action_type, reference, client_id, requested_by_user_id, authorized_by_user_id, amount, created_at)
+             SELECT 'sale_cancel', s.receipt_number, s.client_id, s.cancelled_by_user_id, s.cancel_authorized_by_user_id, s.total, s.cancelled_at
+             FROM sales s WHERE s.cancel_authorized_by_user_id IS NOT NULL;
+
+             INSERT INTO audit_log (action_type, client_id, requested_by_user_id, authorized_by_user_id, amount, created_at)
+             SELECT 'payment_cancel', cp.client_id, cp.cancelled_by_user_id, cp.cancel_authorized_by_user_id, cp.amount, cp.cancelled_at
+             FROM credit_payments cp WHERE cp.cancel_authorized_by_user_id IS NOT NULL;",
+        );
+    }
 }
 
 /// In-memory connection with the schema applied — reused by other modules'
@@ -291,6 +362,7 @@ pub(crate) fn test_connection() -> Connection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::params;
 
     #[test]
     fn schema_applies_cleanly() {
@@ -366,5 +438,36 @@ mod tests {
         .unwrap();
         let font_scale: String = conn.query_row("SELECT font_scale FROM users WHERE username = 'usuario.teste'", [], |row| row.get(0)).unwrap();
         assert_eq!(font_scale, "normal");
+    }
+
+    /// The one-time backfill guard discussed with the user: `audit_log`
+    /// starts empty, so the first `migrate_db` call that sees a
+    /// discount-authorized sale already in `sales` must backfill it — but a
+    /// second call must not duplicate that row, even though nothing new
+    /// stops it from re-running except the "has audit_log ever held a row"
+    /// check itself.
+    #[test]
+    fn migrate_db_backfills_audit_log_once_from_pre_existing_authorizations() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        init_db(&conn).unwrap();
+        migrate_db(&conn); // creates audit_log fresh — still nothing to backfill yet
+
+        conn.execute("INSERT INTO users (name, username, password_hash, is_admin) VALUES ('Admin', 'admin', 'h', 1)", []).unwrap();
+        let admin_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales (receipt_sequential, receipt_number, user_id, subtotal, discount_amount, discount_authorized_by_user_id, discount_authorized_at, total, status)
+             VALUES (1, '20260101000001', ?1, 100.0, 10.0, ?1, '2026-01-01 10:00:00', 90.0, 'completed')",
+            params![admin_id],
+        )
+        .unwrap();
+
+        migrate_db(&conn); // sees the sale for the first time — backfills it
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM audit_log WHERE action_type = 'discount'", [], |row| row.get(0)).unwrap();
+        assert_eq!(count, 1);
+
+        migrate_db(&conn); // audit_log already non-empty — must skip, not duplicate
+        let count_again: i64 = conn.query_row("SELECT COUNT(*) FROM audit_log WHERE action_type = 'discount'", [], |row| row.get(0)).unwrap();
+        assert_eq!(count_again, 1);
     }
 }

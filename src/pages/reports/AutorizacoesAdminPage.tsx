@@ -19,23 +19,24 @@ const ACTION_TYPE_LABEL: Record<AdminAuthorizationRow["actionType"], string> = {
   discount: "Desconto concedido",
   sale_cancel: "Venda cancelada",
   payment_cancel: "Pagamento cancelado",
+  password_reset: "Senha redefinida",
 };
 
 const ACTION_TYPE_BADGE: Record<AdminAuthorizationRow["actionType"], string> = {
   discount: "bg-primary-soft text-primary",
   sale_cancel: "bg-danger/10 text-danger",
   payment_cancel: "bg-warning/10 text-warning",
+  password_reset: "bg-success/10 text-success",
 };
 
 const REPORT_HEADERS = ["Tipo", "Referência", "Cliente", "Valor", "Solicitado por", "Autorizado por", "Data"];
 const REPORT_COLUMN_WEIGHTS = [3, 3, 3, 2, 3, 3, 3];
 
-/** Visão unificada de toda ação que precisou de autorização de Admin — ver
- * `commands::audit::list_admin_authorizations`'s doc comment pra exatamente
- * quais 3 das 4 fontes originalmente planejadas entram aqui (a 4ª,
- * cliente renomeado, não é persistida hoje — `docs/future.md`). Filtro de
- * tipo (`typeFilter`) segue o mesmo padrão do `movementType` de
- * `MovimentacaoEstoquePage`. */
+/** Visão unificada de toda ação que precisou de autorização de Admin, direto
+ * da tabela `audit_log` — ver `commands::audit::list_admin_authorizations`'s
+ * doc comment pra exatamente quais tipos entram aqui (cliente renomeado
+ * ainda não é persistido — `docs/future.md`). Filtro de tipo (`typeFilter`)
+ * segue o mesmo padrão do `movementType` de `MovimentacaoEstoquePage`. */
 export function AutorizacoesAdminPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -65,7 +66,12 @@ export function AutorizacoesAdminPage() {
   useEffect(() => setPage(0), [typeFilter, period.preset, period.customFrom, period.customTo]);
 
   const byType = useMemo(() => {
-    const counts: Record<AdminAuthorizationRow["actionType"], number> = { discount: 0, sale_cancel: 0, payment_cancel: 0 };
+    const counts: Record<AdminAuthorizationRow["actionType"], number> = {
+      discount: 0,
+      sale_cancel: 0,
+      payment_cancel: 0,
+      password_reset: 0,
+    };
     for (const r of filtered) counts[r.actionType] += 1;
     return counts;
   }, [filtered]);
@@ -77,7 +83,7 @@ export function AutorizacoesAdminPage() {
       ACTION_TYPE_LABEL[r.actionType],
       r.reference ?? "—",
       r.clientName ?? "—",
-      fmt(r.amount),
+      r.amount !== null ? fmt(r.amount) : "—",
       r.requestedByName,
       r.authorizedByName,
       fmtDateTime(r.createdAt),
@@ -134,6 +140,7 @@ export function AutorizacoesAdminPage() {
           { label: "Descontos", value: String(byType.discount) },
           { label: "Vendas canceladas", value: String(byType.sale_cancel) },
           { label: "Pagamentos cancelados", value: String(byType.payment_cancel) },
+          { label: "Senhas redefinidas", value: String(byType.password_reset) },
         ],
         REPORT_HEADERS,
         REPORT_COLUMN_WEIGHTS,
@@ -166,6 +173,7 @@ export function AutorizacoesAdminPage() {
           <option value="discount">Desconto concedido</option>
           <option value="sale_cancel">Venda cancelada</option>
           <option value="payment_cancel">Pagamento cancelado</option>
+          <option value="password_reset">Senha redefinida</option>
         </select>
         <Button variant="secondary" onClick={handleExportCsv}>
           ⭱ Exportar CSV
@@ -175,7 +183,7 @@ export function AutorizacoesAdminPage() {
         </Button>
       </PeriodToolbar>
 
-      <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Card>
           <div className="text-xs font-semibold text-theme-3">Total de autorizações</div>
           <div className="mt-1 text-2xl font-bold text-theme-1">{filtered.length}</div>
@@ -191,6 +199,10 @@ export function AutorizacoesAdminPage() {
         <Card>
           <div className="text-xs font-semibold text-theme-3">Pagamentos cancelados</div>
           <div className="mt-1 text-2xl font-bold text-theme-1">{byType.payment_cancel}</div>
+        </Card>
+        <Card>
+          <div className="text-xs font-semibold text-theme-3">Senhas redefinidas</div>
+          <div className="mt-1 text-2xl font-bold text-theme-1">{byType.password_reset}</div>
         </Card>
       </div>
 
@@ -220,7 +232,7 @@ export function AutorizacoesAdminPage() {
                     {r.reference ? <code className="text-xs">{r.reference}</code> : <span className="text-theme-3">—</span>}
                   </td>
                   <td className="px-5 py-3 text-theme-1">{r.clientName ?? "—"}</td>
-                  <td className="px-5 py-3 text-theme-1">{fmt(r.amount)}</td>
+                  <td className="px-5 py-3 text-theme-1">{r.amount !== null ? fmt(r.amount) : "—"}</td>
                   <td className="px-5 py-3 text-theme-1">{r.requestedByName}</td>
                   <td className="px-5 py-3 text-theme-1">{r.authorizedByName}</td>
                   <td className="px-5 py-3 text-theme-1">{fmtDateTime(r.createdAt)}</td>

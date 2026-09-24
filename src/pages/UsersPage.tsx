@@ -6,14 +6,18 @@ import { deleteUser, listUsers } from "../lib/api";
 import { Button } from "../components/Button";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { ContextMenu, ContextMenuItem } from "../components/ContextMenu";
+import { ResetPasswordModal } from "../components/ResetPasswordModal";
 import { UserFormModal } from "../components/UserFormModal";
+import { useToast } from "../context/ToastContext";
 import { fmtDateTime } from "../lib/format";
 import { logger } from "../logger";
 
 export function UsersPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [editing, setEditing] = useState<UserProfile | "new" | null>(null);
+  const [resettingPassword, setResettingPassword] = useState<UserProfile | null>(null);
   const [toDelete, setToDelete] = useState<UserProfile | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; actions: ContextMenuItem[] } | null>(null);
@@ -33,7 +37,10 @@ export function UsersPage() {
   }
 
   function userActions(u: UserProfile): ContextMenuItem[] {
-    const actions: ContextMenuItem[] = [{ label: "Editar", onSelect: () => setEditing(u) }];
+    const actions: ContextMenuItem[] = [
+      { label: "Editar", onSelect: () => setEditing(u) },
+      { label: "Redefinir senha", onSelect: () => setResettingPassword(u) },
+    ];
     if (u.id !== user!.id) {
       actions.push({
         label: "Excluir",
@@ -101,6 +108,9 @@ export function UsersPage() {
                   <Button variant="ghost" className="mr-2" onClick={() => setEditing(u)}>
                     Editar
                   </Button>
+                  <Button variant="ghost" className="mr-2" onClick={() => setResettingPassword(u)}>
+                    Redefinir senha
+                  </Button>
                   {u.id !== user.id && (
                     <Button
                       variant="ghost"
@@ -128,6 +138,17 @@ export function UsersPage() {
             reload();
           }}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {resettingPassword && (
+        <ResetPasswordModal
+          target={resettingPassword}
+          onDone={() => {
+            setResettingPassword(null);
+            showToast({ type: "success", title: `Senha de ${resettingPassword.name} redefinida` });
+          }}
+          onClose={() => setResettingPassword(null)}
         />
       )}
 

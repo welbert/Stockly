@@ -1,3 +1,4 @@
+use super::audit::{self, AuditEntry};
 use super::clients::client_balance;
 use crate::csv_util;
 use crate::guard::{active_user_id, resolve_admin_authorization};
@@ -520,8 +521,10 @@ pub fn cancel_sale(
     let mut conn = state.db.lock().map_err(|e| e.to_string())?;
     let requester_id = active_user_id(&state)?;
 
-    let status: String = conn
-        .query_row("SELECT status FROM sales WHERE id = ?1", params![sale_id], |row| row.get(0))
+    let (status, sale_client_id, receipt_number, total): (String, Option<i64>, String, f64) = conn
+        .query_row("SELECT status, client_id, receipt_number, total FROM sales WHERE id = ?1", params![sale_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
         .map_err(|_| "Venda não encontrada".to_string())?;
     if status != "completed" {
         return Err("Venda já está cancelada".to_string());
@@ -554,6 +557,19 @@ pub fn cancel_sale(
             params![requester_id, authorized_by, sale_id],
         )
         .map_err(|e| e.to_string())?;
+
+        audit::record(
+            &tx,
+            AuditEntry {
+                action_type: "sale_cancel",
+                reference: Some(&receipt_number),
+                client_id: sale_client_id,
+                target_user_id: None,
+                amount: Some(total),
+                requested_by_user_id: requester_id,
+                authorized_by_user_id: authorized_by,
+            },
+        )?;
 
         tx.commit().map_err(|e| e.to_string())?;
     }
@@ -701,6 +717,22 @@ pub fn create_sale(
         )
         .map_err(|e| e.to_string())?;
         let sale_id = tx.last_insert_rowid();
+
+        if let Some(authorized_by) = discount_authorized_by {
+            let gross_total = round2(prepared.iter().map(|l| l.unit_price * l.quantity as f64).sum());
+            audit::record(
+                &tx,
+                AuditEntry {
+                    action_type: "discount",
+                    reference: Some(&receipt_number),
+                    client_id,
+                    target_user_id: None,
+                    amount: Some(round2(gross_total - total)),
+                    requested_by_user_id: cashier_id,
+                    authorized_by_user_id: authorized_by,
+                },
+            )?;
+        }
 
         for line in &prepared {
             tx.execute("UPDATE items SET quantity = quantity - ?1 WHERE id = ?2", params![line.quantity, line.item_id])

@@ -66,6 +66,7 @@ pub fn run() {
             commands::users::list_users,
             commands::users::create_user,
             commands::users::update_user,
+            commands::users::reset_user_password,
             commands::users::delete_user,
             commands::users::update_theme,
             commands::users::update_font_scale,

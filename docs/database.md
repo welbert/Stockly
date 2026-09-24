@@ -190,6 +190,25 @@ A `credit_payments` row can have 1+ allocation rows — `commands::clients::regi
 
 `UNIQUE(user_id, card_key)` — one row per card per Admin. `commands::dashboard_layout::get_dashboard_layout` seeds `db::DEFAULT_DASHBOARD_LAYOUT` (a curated subset of the catalog, not every card) the first time a given Admin's rows are empty, rather than seeding at `create_user` time — Dashboard is Admin-only, so seeding for every profile at creation would leave dead rows for every Usuário comum, who never opens this screen. `save_dashboard_layout` replaces the whole set for that Admin in one transaction (delete + re-insert) on every drag/resize (debounced client-side) and add/remove-card click (immediate).
 
+### `audit_log` — append-only trail of every admin-authorized action
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `action_type` | TEXT CHECK IN (`discount`, `sale_cancel`, `payment_cancel`, `password_reset`) | |
+| `reference` | TEXT NULL | receipt number for `discount`/`sale_cancel`; `null` for `payment_cancel`/`password_reset` (neither has a receipt of its own) |
+| `client_id` | INTEGER NULL → `clients(id)` | set for `discount`/`sale_cancel`/`payment_cancel` when a client was identified; always `null` for `password_reset` |
+| `target_user_id` | INTEGER NULL → `users(id)` | only set for `password_reset` (whose password); mutually exclusive with `client_id` — never both set on the same row |
+| `amount` | REAL NULL | `null` for `password_reset` (no monetary amount) |
+| `requested_by_user_id` | INTEGER NOT NULL → `users(id)` | who performed the underlying action |
+| `authorized_by_user_id` | INTEGER NOT NULL → `users(id)` | which Admin authorized it — equal to `requested_by_user_id` whenever the acting admin self-authorized (already an Admin, or — for `password_reset`, which has no second-admin flow at all — always) |
+| `created_at` | TEXT | |
+
+Never edited or deleted. Written by `commands::audit::record`, called inline — same transaction, never an afterthought outside it — from `commands::sales::create_sale` (`discount`, when at least one item/general discount was authorized), `commands::sales::cancel_sale` (`sale_cancel`), `commands::clients::cancel_credit_payment` (`payment_cancel`), and `commands::users::reset_user_password` (`password_reset`). Feeds `commands::audit::list_admin_authorizations` — see `docs/commands.md`'s "Audit" section — which is now a single query against this table instead of 3 separate ones unioned in Rust (how it worked before this table existed).
+
+`db::migrate_db` also backfills this table **once** from the 3 sources that predate it (`sales.discount_authorized_by_user_id`/`cancel_authorized_by_user_id`, `credit_payments.cancel_authorized_by_user_id`) — guarded by a plain "does `audit_log` already have at least one row" check rather than an idempotent `INSERT OR IGNORE` left running on every launch forever: once either that backfill or a single live write (from any install already running the version with this table) has landed one row, the guard skips the backfill on every subsequent launch. Deliberate trade-off, discussed with the user before building this: simpler than adding a migration-version-tracking mechanism this codebase has never otherwise needed, at the cost that a *future* change to the backfill query's own logic won't retroactively reach an install that already tripped the guard.
+
+Indexed on `created_at` (`list_admin_authorizations`' `ORDER BY created_at DESC`).
+
 ### `config` — generic key/value
 ```
 config(key TEXT PRIMARY KEY, value TEXT NOT NULL)

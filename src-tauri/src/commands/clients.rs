@@ -1,3 +1,4 @@
+use super::audit::{self, AuditEntry};
 use crate::documents::{normalize_document, validate_cnpj, validate_cpf};
 use crate::guard::{active_user_id, resolve_admin_authorization};
 use crate::models::{
@@ -567,28 +568,47 @@ pub fn cancel_credit_payment(
     authorizer_id: Option<i64>,
     authorizer_password: Option<String>,
 ) -> Result<ClientDetail, String> {
-    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let mut conn = state.db.lock().map_err(|e| e.to_string())?;
     let requester_id = active_user_id(&state)?;
     let trimmed_reason = reason.trim();
     if trimmed_reason.is_empty() {
         return Err("Motivo é obrigatório".to_string());
     }
-    let (client_id, already_cancelled): (i64, Option<String>) = conn
-        .query_row("SELECT client_id, cancelled_at FROM credit_payments WHERE id = ?1", params![payment_id], |row| {
-            Ok((row.get(0)?, row.get(1)?))
+    let (client_id, amount, already_cancelled): (i64, f64, Option<String>) = conn
+        .query_row("SELECT client_id, amount, cancelled_at FROM credit_payments WHERE id = ?1", params![payment_id], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })
         .map_err(|_| "Pagamento não encontrado".to_string())?;
     if already_cancelled.is_some() {
         return Err("Pagamento já está cancelado".to_string());
     }
     let authorized_by = resolve_admin_authorization(&state, &conn, authorizer_id, authorizer_password.as_deref())?;
-    conn.execute(
-        "UPDATE credit_payments
-         SET cancelled_at = datetime('now'), cancelled_by_user_id = ?1, cancel_authorized_by_user_id = ?2, cancel_reason = ?3
-         WHERE id = ?4",
-        params![requester_id, authorized_by, trimmed_reason, payment_id],
-    )
-    .map_err(|e| e.to_string())?;
+
+    {
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute(
+            "UPDATE credit_payments
+             SET cancelled_at = datetime('now'), cancelled_by_user_id = ?1, cancel_authorized_by_user_id = ?2, cancel_reason = ?3
+             WHERE id = ?4",
+            params![requester_id, authorized_by, trimmed_reason, payment_id],
+        )
+        .map_err(|e| e.to_string())?;
+
+        audit::record(
+            &tx,
+            AuditEntry {
+                action_type: "payment_cancel",
+                reference: None,
+                client_id: Some(client_id),
+                target_user_id: None,
+                amount: Some(amount),
+                requested_by_user_id: requester_id,
+                authorized_by_user_id: authorized_by,
+            },
+        )?;
+
+        tx.commit().map_err(|e| e.to_string())?;
+    }
 
     fetch_client_detail(&conn, client_id)
 }

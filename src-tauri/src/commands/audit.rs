@@ -1,123 +1,87 @@
 use crate::guard::active_user_id;
 use crate::models::AdminAuthorizationRow;
-use crate::money::round2;
 use crate::AppState;
+use rusqlite::{params, Connection};
 use tauri::State;
 
-/// Every authorized admin action, from **3** of the 4 originally-planned
-/// "Autorizações de Administrador" candidate names:
-/// desconto concedido (`sales.discount_authorized_by_user_id`), venda
-/// cancelada (`sales.cancel_authorized_by_user_id`) and pagamento de
-/// Crediário cancelado (`credit_payments.cancel_authorized_by_user_id`). The
-/// 4th (cliente renomeado com saldo em aberto) is deliberately left out —
-/// `commands::clients::update_client` verifies the admin password but never
-/// persists who authorized it or when, and `clients` is current-state (not
-/// an append-only ledger like `sales`/`credit_payments`), so a plain column
-/// there would only ever hold the *last* rename, silently dropping every
-/// earlier one from this report. Fixing that for real needs a proper
-/// append-only audit table, decided out of scope here — logged in
-/// `docs/future.md` instead of half-implemented as a lossy column.
+/// One row to append to `audit_log` (`db.rs`) — written in the **same
+/// transaction** as the action it records (discount, sale/payment cancel,
+/// password reset), never as an afterthought outside it, so the trail can't
+/// drift from what actually happened. `created_at` is deliberately not a
+/// field here: every live write leaves it to the column's own `DEFAULT
+/// (datetime('now'))` — only `db::migrate_db`'s one-time historical backfill
+/// sets it explicitly, to the real historical timestamp instead of "now".
+pub(crate) struct AuditEntry<'a> {
+    pub action_type: &'a str,
+    pub reference: Option<&'a str>,
+    pub client_id: Option<i64>,
+    pub target_user_id: Option<i64>,
+    pub amount: Option<f64>,
+    pub requested_by_user_id: i64,
+    pub authorized_by_user_id: i64,
+}
+
+pub(crate) fn record(conn: &Connection, entry: AuditEntry) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO audit_log (action_type, reference, client_id, target_user_id, amount, requested_by_user_id, authorized_by_user_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            entry.action_type,
+            entry.reference,
+            entry.client_id,
+            entry.target_user_id,
+            entry.amount,
+            entry.requested_by_user_id,
+            entry.authorized_by_user_id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Every authorized admin action — desconto concedido, venda cancelada,
+/// pagamento de Crediário cancelado, senha redefinida — read straight from
+/// the single append-only `audit_log` table instead of the 3 separate
+/// per-table queries this command used before that table existed (each
+/// action's own write site now calls `record` above, inline with the action
+/// itself — see `commands::sales::create_sale`/`cancel_sale`,
+/// `commands::clients::cancel_credit_payment`,
+/// `commands::users::reset_user_password`).
 ///
-/// Each source is queried separately (its own row shape, own joins) then
-/// merged and sorted by `createdAt` descending in Rust — a single `UNION`
-/// query across `sales` (queried twice, for two different columns) and
-/// `credit_payments` would need every column padded to the widest row
-/// anyway, with no real savings over 3 plain queries.
+/// `clientName` is doubly-used: a client's name for the first 3 action
+/// types, or the *target user's* name for `password_reset` — mutually
+/// exclusive (`client_id`/`target_user_id` are never both set on the same
+/// row), merged here via `COALESCE` rather than stretching the row shape
+/// with a second, almost-always-null name column.
 #[tauri::command]
 pub fn list_admin_authorizations(state: State<AppState>) -> Result<Vec<AdminAuthorizationRow>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     active_user_id(&state)?;
 
-    let mut rows = Vec::new();
-
-    let mut discount_stmt = conn
+    let mut stmt = conn
         .prepare(
-            "SELECT s.id, s.receipt_number, c.name, u.name, a.name, s.discount_authorized_at,
-                    COALESCE((SELECT SUM(si.unit_price * si.quantity) FROM sale_items si WHERE si.sale_id = s.id), 0) - s.total
-             FROM sales s
-             JOIN users u ON u.id = s.user_id
-             JOIN users a ON a.id = s.discount_authorized_by_user_id
-             LEFT JOIN clients c ON c.id = s.client_id
-             WHERE s.discount_authorized_by_user_id IS NOT NULL",
+            "SELECT al.id, al.action_type, al.reference, COALESCE(c.name, tu.name), al.amount, ru.name, au.name, al.created_at
+             FROM audit_log al
+             JOIN users ru ON ru.id = al.requested_by_user_id
+             JOIN users au ON au.id = al.authorized_by_user_id
+             LEFT JOIN clients c ON c.id = al.client_id
+             LEFT JOIN users tu ON tu.id = al.target_user_id
+             ORDER BY al.created_at DESC",
         )
         .map_err(|e| e.to_string())?;
-    let discount_rows = discount_stmt
+    let rows = stmt
         .query_map([], |row| {
-            let sale_id: i64 = row.get(0)?;
             Ok(AdminAuthorizationRow {
-                id: format!("discount-{sale_id}"),
-                action_type: "discount".into(),
-                reference: row.get(1)?,
-                client_name: row.get(2)?,
-                requested_by_name: row.get(3)?,
-                authorized_by_name: row.get(4)?,
-                created_at: row.get(5)?,
-                amount: round2(row.get(6)?),
+                id: row.get(0)?,
+                action_type: row.get(1)?,
+                reference: row.get(2)?,
+                client_name: row.get(3)?,
+                amount: row.get(4)?,
+                requested_by_name: row.get(5)?,
+                authorized_by_name: row.get(6)?,
+                created_at: row.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?;
-    for row in discount_rows {
-        rows.push(row.map_err(|e| e.to_string())?);
-    }
-
-    let mut sale_cancel_stmt = conn
-        .prepare(
-            "SELECT s.id, s.receipt_number, c.name, cb.name, ca.name, s.cancelled_at, s.total
-             FROM sales s
-             JOIN users cb ON cb.id = s.cancelled_by_user_id
-             JOIN users ca ON ca.id = s.cancel_authorized_by_user_id
-             LEFT JOIN clients c ON c.id = s.client_id
-             WHERE s.cancel_authorized_by_user_id IS NOT NULL",
-        )
-        .map_err(|e| e.to_string())?;
-    let sale_cancel_rows = sale_cancel_stmt
-        .query_map([], |row| {
-            let sale_id: i64 = row.get(0)?;
-            Ok(AdminAuthorizationRow {
-                id: format!("sale_cancel-{sale_id}"),
-                action_type: "sale_cancel".into(),
-                reference: row.get(1)?,
-                client_name: row.get(2)?,
-                requested_by_name: row.get(3)?,
-                authorized_by_name: row.get(4)?,
-                created_at: row.get(5)?,
-                amount: row.get(6)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    for row in sale_cancel_rows {
-        rows.push(row.map_err(|e| e.to_string())?);
-    }
-
-    let mut payment_cancel_stmt = conn
-        .prepare(
-            "SELECT cp.id, cl.name, cb.name, ca.name, cp.cancelled_at, cp.amount
-             FROM credit_payments cp
-             JOIN clients cl ON cl.id = cp.client_id
-             JOIN users cb ON cb.id = cp.cancelled_by_user_id
-             JOIN users ca ON ca.id = cp.cancel_authorized_by_user_id
-             WHERE cp.cancel_authorized_by_user_id IS NOT NULL",
-        )
-        .map_err(|e| e.to_string())?;
-    let payment_cancel_rows = payment_cancel_stmt
-        .query_map([], |row| {
-            let payment_id: i64 = row.get(0)?;
-            Ok(AdminAuthorizationRow {
-                id: format!("payment_cancel-{payment_id}"),
-                action_type: "payment_cancel".into(),
-                reference: None,
-                client_name: row.get(1)?,
-                requested_by_name: row.get(2)?,
-                authorized_by_name: row.get(3)?,
-                created_at: row.get(4)?,
-                amount: row.get(5)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    for row in payment_cancel_rows {
-        rows.push(row.map_err(|e| e.to_string())?);
-    }
-
-    rows.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-    Ok(rows)
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }

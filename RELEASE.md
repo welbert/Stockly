@@ -9,6 +9,8 @@
 - **Novidade:** Em Configurações, novo grupo "Acessibilidade" com opção de aumentar ou diminuir o tamanho da fonte do app — preferência salva no seu perfil.
 - **Novidade:** Em Configurações, dá pra escolher com quantos dígitos o código automático de um item novo é gerado (ex.: "0001") — só afeta o código gerado automaticamente quando o campo é deixado em branco, nunca um código digitado à mão.
 - **Novidade:** Tela de Configurações reorganizada em grupos recolhíveis (Perfil e aparência, Loja e recibo, Estoque e precificação, Backup e restauração, Sistema e diagnóstico), com um campo de busca no topo que acha qualquer configuração pelo nome sem precisar saber em qual grupo ela está.
+- **Novidade:** Administrador agora consegue redefinir a senha de qualquer usuário (incluindo outros administradores e a própria conta) direto na tela Usuários, sem precisar saber a senha atual — útil quando alguém esquece a senha.
+- **Novidade:** O relatório "Autorizações de Administrador" agora também mostra as redefinições de senha, junto com descontos, cancelamentos de venda e de pagamento.
 
 # Stockly — v0.0.3
 

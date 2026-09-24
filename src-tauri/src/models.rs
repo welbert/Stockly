@@ -535,29 +535,35 @@ pub struct CreditPaymentReportRow {
     pub cancel_reason: Option<String>,
 }
 
-/// One authorized admin action, from one of 3 sources unioned by
-/// `commands::audit::list_admin_authorizations` — see that command's doc
-/// comment for exactly which 3, and why a 4th candidate (cliente renomeado)
-/// isn't included. `id` is synthesized (`"{actionType}-{row id}"`, e.g.
-/// `"discount-42"`) since rows come from 3 different tables with their own
-/// autoincrement ids — just a stable React key, not a real database id.
+/// One row of the `audit_log` table (`db.rs`), read by
+/// `commands::audit::list_admin_authorizations`. `id` is now a real database
+/// id (previously synthesized as `"{actionType}-{row id}"` back when this
+/// unioned 3 separate tables with colliding ids — no longer needed now that
+/// every action type lives in the same table with its own autoincrement id).
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AdminAuthorizationRow {
-    pub id: String,
-    /// `"discount"` | `"sale_cancel"` | `"payment_cancel"`.
+    pub id: i64,
+    /// `"discount"` | `"sale_cancel"` | `"payment_cancel"` | `"password_reset"`.
     pub action_type: String,
     /// Receipt number for `discount`/`sale_cancel`, `null` for
-    /// `payment_cancel` (a payment has no receipt of its own — `clientName`
-    /// is the reference there instead).
+    /// `payment_cancel`/`password_reset` (neither has a receipt of its own —
+    /// `clientName` is the reference there instead).
     pub reference: Option<String>,
+    /// A client's name for `discount`/`sale_cancel`/`payment_cancel`, or the
+    /// *target user's* name for `password_reset` — see
+    /// `commands::audit::list_admin_authorizations`'s doc comment for why
+    /// these share one field instead of two, almost always null, columns.
     pub client_name: Option<String>,
-    pub amount: f64,
+    /// `null` for `password_reset` — there's no monetary amount to show.
+    pub amount: Option<f64>,
     /// Who performed the underlying action (applied the discount, requested
-    /// the cancellation) — same person as `authorizedByName` when an Admin
-    /// self-authorized their own action (no separate password typed, see
-    /// `guard::resolve_admin_authorization`), different when a second admin's
-    /// password was required.
+    /// the cancellation, reset the password) — same person as
+    /// `authorizedByName` when an Admin self-authorized their own action (no
+    /// separate password typed, see `guard::resolve_admin_authorization`),
+    /// different when a second admin's password was required. Always equal
+    /// to `authorizedByName` for `password_reset`, which has no
+    /// second-admin flow at all (the page is already Admin-only).
     pub requested_by_name: String,
     pub authorized_by_name: String,
     pub created_at: String,

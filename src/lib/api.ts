@@ -73,6 +73,15 @@ export function deleteUser(id: number) {
   return call<void>("delete_user", { id });
 }
 
+/** Admin-only, no old password required — the only way back in for someone
+ * who forgot theirs, and (deliberately) also the only way anyone, including
+ * the acting admin themselves, ever changes a password after account
+ * creation. Logged to the `audit_log`-backed "Autorizações de Administrador"
+ * report as `password_reset`. */
+export function resetUserPassword(id: number, newPassword: string) {
+  return call<void>("reset_user_password", { id, newPassword });
+}
+
 export function updateTheme(theme: string) {
   return call<void>("update_theme", { theme });
 }
@@ -790,16 +799,18 @@ export function listCreditPayments() {
   return call<CreditPaymentReportRow[]>("list_credit_payments");
 }
 
-/** One authorized admin action, from 3 of the 4 originally-planned
- * "Autorizações de Administrador" sources — see
- * `commands::audit::list_admin_authorizations`'s doc comment for why the 4th
- * (cliente renomeado) isn't included yet. */
+/** One row of the `audit_log` table, read by
+ * `commands::audit::list_admin_authorizations`. `clientName` doubles as the
+ * *target user's* name for `actionType === "password_reset"` (mutually
+ * exclusive with a real client — see that command's doc comment). Renaming a
+ * client with an open balance is also admin-gated but still isn't logged
+ * here — `docs/future.md`'s "Auditoria" section. */
 export type AdminAuthorizationRow = {
-  id: string;
-  actionType: "discount" | "sale_cancel" | "payment_cancel";
+  id: number;
+  actionType: "discount" | "sale_cancel" | "payment_cancel" | "password_reset";
   reference: string | null;
   clientName: string | null;
-  amount: number;
+  amount: number | null;
   requestedByName: string;
   authorizedByName: string;
   createdAt: string;
