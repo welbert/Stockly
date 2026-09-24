@@ -27,6 +27,7 @@ Every mutation that isn't self-service (`update_theme`, `update_my_auto_lock`, `
 | `update_user` | `(id, name, is_admin, active, auto_lock_minutes) -> UserProfile` | admin-only. `username` isn't editable (assigned once at creation). The "elevate to Admin" confirmation is a frontend-only modal (`UserFormModal`) before calling this — no separate backend step. Refuses to change `is_admin`/`active` on **your own** logged-in row (`is_active_session`) — only a *different* admin can grant/revoke a role or (de)activate an account. Also refuses to demote or deactivate the **last active Admin** (`is_last_active_admin`) — otherwise nothing could unlock the app again short of editing the `.db` by hand |
 | `delete_user` | `(id) -> ()` | admin-only, hard delete. Refuses to delete your own logged-in row, same reasoning as above. Also refuses to delete the last active Admin. Fails with a foreign-key error if the user has sales/stock movements/credit payments on record (no cascade there by design) |
 | `update_theme` | `(theme) -> ()` | self-service — always writes to whichever user is in `AppState.active_user_id`, never a `user_id` argument |
+| `update_font_scale` | `(font_scale) -> ()` | same shape as `update_theme` — self-service, always the active session's own row. Accessibility text-size preference; only ever consumed by the frontend's own `<html>` `font-size` (`FontScaleContext`), never by PDF generation |
 | `update_my_auto_lock` | `(auto_lock_minutes) -> UserProfile` | self-service equivalent of `update_user`'s `auto_lock_minutes` field — any logged-in profile (not just Admin) can change its own idle-lock timeout |
 | `list_admins` | `() -> Vec<UserSummary>` | any logged-in profile, active admins only — feeds the admin picker in the discount-authorization modal (Venda) |
 
@@ -63,6 +64,8 @@ Every mutation that isn't self-service (`update_theme`, `update_my_auto_lock`, `
 | `set_low_stock_percent` | `(percent) -> ()` | admin-only — shown only in the Administrador's Configurações |
 | `get_default_profit_margin` | `() -> f64` | admin-only both ways (not just the write) — only the item creation form consumes it. Defaults to `30` (a reasonable starting markup) if the `config` row `default_profit_margin_percent` was never set |
 | `set_default_profit_margin` | `(percent) -> ()` | admin-only |
+| `get_item_code_pad_length` | `() -> i64` | admin-only both ways — only the (Admin-only) item creation form/CSV import consume it. Defaults to `4` if the `config` row `item_code_pad_length` was never set |
+| `set_item_code_pad_length` | `(digits) -> ()` | admin-only. Rejects anything outside `1..=10` |
 | `get_store_name` | `() -> String` | any logged-in profile. Empty string (the default) means the receipt falls back to "BORA VENDER" |
 | `set_store_name` | `(name) -> ()` | admin-only. Feeds the bold header line on the PDF receipt (`receipts.rs`) in place of "BORA VENDER" |
 | `get_store_info` | `() -> String` | any logged-in profile. Free multi-line text (e.g. CNPJ, phone) |

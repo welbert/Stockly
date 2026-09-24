@@ -31,6 +31,7 @@ export type UserProfile = {
   /** Three-state: null = usa o padrão do papel, 0 = "Nunca", N = minutos. */
   autoLockMinutes: number | null;
   theme: string;
+  fontScale: string;
   /** ISO-ish `datetime('now')` do SQLite (UTC); `null` = nunca logou (ex.: criado por outro admin, ainda não usou). */
   lastLoginAt: string | null;
 };
@@ -74,6 +75,10 @@ export function deleteUser(id: number) {
 
 export function updateTheme(theme: string) {
   return call<void>("update_theme", { theme });
+}
+
+export function updateFontScale(fontScale: string) {
+  return call<void>("update_font_scale", { fontScale });
 }
 
 export function updateMyAutoLock(autoLockMinutes: number | null) {
@@ -294,6 +299,18 @@ export function getLowStockPercent() {
 
 export function setLowStockPercent(percent: number) {
   return call<void>("set_low_stock_percent", { percent });
+}
+
+/** How many digits an auto-generated item code (blank code at creation) is
+ * left-padded to with `'0'` — a minimum width, never a cap: an id with more
+ * digits than this is never truncated. Never applies to a manually typed
+ * code. */
+export function getItemCodePadLength() {
+  return call<number>("get_item_code_pad_length");
+}
+
+export function setItemCodePadLength(digits: number) {
+  return call<void>("set_item_code_pad_length", { digits });
 }
 
 export function getDefaultProfitMargin() {

@@ -28,13 +28,18 @@ Then restart the app.
 
 ~45 days of activity ending "today" (relative to whenever it was generated):
 18 items across 4 categories (several deliberately at/under their low-stock
-threshold, one at zero, one that never alerts), 5 Crediário clients (an
-overdue reminder, one due tomorrow, one at the edge of the warning window,
-one far out, one fully quitado with payment history, one still partially
-open), sales across all 4 payment methods, at least one sale in every one of
-the last 7 days, a cancelled/estornada sale, and a couple of discounted sales
-(one item-level, one general — both admin-authorized, since the buyer was
-the Usuário comum profile).
+threshold, one at zero, one that never alerts), 7 clients — 5 with a
+Crediário balance (an overdue reminder, one due tomorrow, one at the edge of
+the warning window, one far out, one fully quitado with payment history, one
+still partially open) plus 2 that never owe anything, each only ever
+identified on a Dinheiro/Cartão sale (optional there, same as any real sale)
+to demo the Clientes screen listing everyone, not just debtors. A few clients
+also carry a birth date and/or CPF/CNPJ (one of the CNPJs uses the new
+alphanumeric format), others intentionally don't, same as a real store where
+not everyone hands one over. Sales across all 4 payment methods, at least one
+sale in every one of the last 7 days, a cancelled/estornada sale, and a
+couple of discounted sales (one item-level, one general — both
+admin-authorized, since the buyer was the Usuário comum profile).
 
 ## Regenerating it
 

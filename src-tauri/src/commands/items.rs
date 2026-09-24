@@ -1,3 +1,4 @@
+use crate::commands::config::item_code_pad_length;
 use crate::csv_util;
 use crate::guard::{active_user_id, require_admin};
 use crate::models::{
@@ -76,6 +77,19 @@ fn predict_next_item_id(conn: &Connection) -> Result<i64, String> {
         .optional()
         .map_err(|e| e.to_string())?;
     Ok(seq.unwrap_or(0) + 1)
+}
+
+/// The base an auto-generated code starts from: the item's own future id,
+/// left-padded with `'0'` to `item_code_pad_length` (Configurações, default
+/// 4 — "0001"). `format!`'s zero-padding never truncates, so an id with more
+/// digits than the configured width is left as-is ("12345" at width 4) —
+/// the setting is a minimum width, not a cap. `unique_code` (called by every
+/// caller of this) still appends a plain `-2`/`-3` suffix on collision,
+/// unaffected by the padding.
+fn padded_next_code_base(conn: &Connection) -> Result<String, String> {
+    let id = predict_next_item_id(conn)?;
+    let width = item_code_pad_length(conn)? as usize;
+    Ok(format!("{id:0width$}"))
 }
 
 fn record_movement(conn: &Connection, item_id: i64, movement_type: &str, delta: i64, user_id: i64) -> Result<(), String> {
@@ -185,8 +199,9 @@ pub fn list_item_price_history(state: State<AppState>) -> Result<Vec<ItemPriceHi
 /// (nothing to log for a fresh item that starts at zero).
 ///
 /// `code` is optional: an empty/blank string means "use the item's own id as
-/// the code" (predicted via `predict_next_item_id`, before the row exists) —
-/// kept simple on purpose; the admin can still edit it into a real code
+/// the code" (predicted via `predict_next_item_id`, before the row exists),
+/// left-padded per `item_code_pad_length` (`padded_next_code_base`) — kept
+/// simple on purpose; the admin can still edit it into a real code
 /// afterward through `update_item`, same as any other field.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -210,7 +225,7 @@ pub fn create_item(
     }
     let trimmed_code = code.trim();
     let final_code = if trimmed_code.is_empty() {
-        unique_code(&conn, &predict_next_item_id(&conn)?.to_string())?
+        unique_code(&conn, &padded_next_code_base(&conn)?)?
     } else {
         if code_taken(&conn, trimmed_code, None)? {
             return Err("Já existe um item com esse código".to_string());
@@ -635,7 +650,7 @@ pub fn apply_items_csv_import(state: State<AppState>, decision: ItemsCsvImportDe
             let row = &create.row;
             let trimmed_code = row.code.trim();
             let final_code = if trimmed_code.is_empty() {
-                unique_code(&tx, &predict_next_item_id(&tx)?.to_string())?
+                unique_code(&tx, &padded_next_code_base(&tx)?)?
             } else if code_taken(&tx, trimmed_code, None)? {
                 return Err(format!("Já existe um item com o código \"{trimmed_code}\""));
             } else {
@@ -739,6 +754,23 @@ mod tests {
             .unwrap();
         assert_eq!(conn.last_insert_rowid(), 1);
         assert_eq!(predict_next_item_id(&conn).unwrap(), 2);
+    }
+
+    #[test]
+    fn padded_next_code_base_pads_with_configured_width_but_never_truncates() {
+        let conn = test_connection();
+        // No config row yet — falls back to the default width (4).
+        assert_eq!(padded_next_code_base(&conn).unwrap(), "0001");
+
+        conn.execute("INSERT INTO config (key, value) VALUES ('item_code_pad_length', '2')", []).unwrap();
+        assert_eq!(padded_next_code_base(&conn).unwrap(), "01");
+
+        // A large id is never truncated below its own digit count, even at a
+        // narrower configured width — padding only ever adds zeros, never cuts.
+        conn.execute("INSERT INTO items (code, name, cost_price, sale_price, quantity) VALUES ('seed', 'Seed', 0, 0, 0)", [])
+            .unwrap();
+        conn.execute("UPDATE sqlite_sequence SET seq = 12344 WHERE name = 'items'", []).unwrap();
+        assert_eq!(padded_next_code_base(&conn).unwrap(), "12345");
     }
 
     #[test]

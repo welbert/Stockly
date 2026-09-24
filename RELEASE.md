@@ -6,6 +6,8 @@
 - **Novidade:** Agora dá pra identificar o cliente em qualquer forma de pagamento (Dinheiro, Cartão, PIX), não só no Crediário — é opcional, direto na tela de finalizar venda.
 - **Novidade:** O detalhe do cliente mostra o histórico completo de compras (qualquer forma de pagamento), não só as vendas no Crediário.
 - **Novidade:** Cadastro de cliente ganhou data de nascimento e CPF/CNPJ (com validação), além dos campos que já existiam.
+- **Novidade:** Em Configurações, novo grupo "Acessibilidade" com opção de aumentar ou diminuir o tamanho da fonte do app — preferência salva no seu perfil.
+- **Novidade:** Em Configurações, dá pra escolher com quantos dígitos o código automático de um item novo é gerado (ex.: "0001") — só afeta o código gerado automaticamente quando o campo é deixado em branco, nunca um código digitado à mão.
 
 # Stockly — v0.0.3
 

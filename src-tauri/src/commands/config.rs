@@ -44,6 +44,50 @@ pub fn set_low_stock_percent(state: State<AppState>, percent: i64) -> Result<(),
     Ok(())
 }
 
+const ITEM_CODE_PAD_LENGTH_KEY: &str = "item_code_pad_length";
+/// 4 digits ("0001") is a reasonable starting width for a small store's
+/// catalog; change via `set_item_code_pad_length`. Only affects codes the
+/// app generates on its own (blank `code` at creation, see
+/// `commands::items::padded_next_code_base`) — never a manually typed code,
+/// and never shrinks a generated code below its natural digit count once the
+/// item count outgrows this width (e.g. item #12345 stays "12345" even at
+/// the default width of 4 — padding never truncates).
+const DEFAULT_ITEM_CODE_PAD_LENGTH: i64 = 4;
+
+/// `pub(crate)`, not just the `#[tauri::command]` below — also read directly
+/// by `commands::items::create_item`/`import_items_csv` when generating a code.
+pub(crate) fn item_code_pad_length(conn: &Connection) -> Result<i64, String> {
+    let value: Option<String> = conn
+        .query_row("SELECT value FROM config WHERE key = ?1", params![ITEM_CODE_PAD_LENGTH_KEY], |row| row.get(0))
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(value.and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_ITEM_CODE_PAD_LENGTH))
+}
+
+/// Admin-only both ways — only the (Admin-only) item creation form and CSV
+/// import consume this.
+#[tauri::command]
+pub fn get_item_code_pad_length(state: State<AppState>) -> Result<i64, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    require_admin(&state, &conn)?;
+    item_code_pad_length(&conn)
+}
+
+#[tauri::command]
+pub fn set_item_code_pad_length(state: State<AppState>, digits: i64) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    require_admin(&state, &conn)?;
+    if !(1..=10).contains(&digits) {
+        return Err("Número de dígitos deve estar entre 1 e 10".to_string());
+    }
+    conn.execute(
+        "INSERT INTO config (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![ITEM_CODE_PAD_LENGTH_KEY, digits.to_string()],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 const PROFIT_MARGIN_KEY: &str = "default_profit_margin_percent";
 /// 30% is a reasonable starting markup over cost; change via
 /// `set_default_profit_margin`.

@@ -9,6 +9,7 @@ import {
   getBackupFolder,
   getCreditEnabled,
   getDefaultProfitMargin,
+  getItemCodePadLength,
   getLowStockPercent,
   getReceiptThankYouMessage,
   getReceiptsFolder,
@@ -19,6 +20,7 @@ import {
   setBackupFolder,
   setCreditEnabled,
   setDefaultProfitMargin,
+  setItemCodePadLength,
   setLowStockPercent,
   setReceiptThankYouMessage,
   setReceiptsFolder,
@@ -29,6 +31,7 @@ import {
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Checkbox } from "../components/Checkbox";
+import { FontScaleSwitcher } from "../components/FontScaleSwitcher";
 import { RestoreBackupModal } from "../components/RestoreBackupModal";
 import { ThemeSwitcher } from "../components/ThemeSwitcher";
 import { useToast } from "../context/ToastContext";
@@ -52,6 +55,7 @@ export function SettingsPage() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [lowStockPercent, setLowStockPercentState] = useState<number | null>(null);
   const [profitMargin, setProfitMarginState] = useState<number | null>(null);
+  const [itemCodePadLength, setItemCodePadLengthState] = useState<number | null>(null);
   const [storeName, setStoreNameState] = useState<string | null>(null);
   const [storeInfo, setStoreInfoState] = useState<string | null>(null);
   const [thankYouMessage, setThankYouMessageState] = useState<string | null>(null);
@@ -68,6 +72,9 @@ export function SettingsPage() {
       getDefaultProfitMargin()
         .then(setProfitMarginState)
         .catch((err) => logger.error("falha ao ler margem de lucro padrão", err));
+      getItemCodePadLength()
+        .then(setItemCodePadLengthState)
+        .catch((err) => logger.error("falha ao ler número de dígitos do código automático", err));
       getStoreName()
         .then(setStoreNameState)
         .catch((err) => logger.error("falha ao ler nome da loja", err));
@@ -115,6 +122,15 @@ export function SettingsPage() {
       await setDefaultProfitMargin(value);
     } catch (err) {
       logger.error("falha ao salvar margem de lucro padrão", err);
+    }
+  }
+
+  async function handleItemCodePadLengthChange(value: number) {
+    setItemCodePadLengthState(value);
+    try {
+      await setItemCodePadLength(value);
+    } catch (err) {
+      logger.error("falha ao salvar número de dígitos do código automático", err);
     }
   }
 
@@ -268,6 +284,14 @@ export function SettingsPage() {
         <p className="mt-2.5 text-xs text-theme-3">Preferência salva no seu perfil e lembrada entre reinícios.</p>
       </Card>
 
+      <Card title="Acessibilidade" className="col-span-2">
+        <label className="mb-1.5 block text-xs font-semibold text-theme-3">Tamanho da fonte</label>
+        <FontScaleSwitcher />
+        <p className="mt-2.5 text-xs text-theme-3">
+          Ajusta o texto do app inteiro. Preferência salva no seu perfil e lembrada entre reinícios — não afeta o PDF do recibo.
+        </p>
+      </Card>
+
       <Card title="Bloqueio automático">
         <label className="mb-1.5 block text-xs font-semibold text-theme-3">Bloquear por inatividade após</label>
         <select
@@ -339,6 +363,26 @@ export function SettingsPage() {
           <p className="mt-2.5 text-xs text-theme-3">
             Ao cadastrar um item novo, o preço de venda é sugerido automaticamente (custo + esse percentual) — ainda
             editável antes de salvar.
+          </p>
+        </Card>
+      )}
+
+      {user.isAdmin && itemCodePadLength !== null && (
+        <Card title="Código automático de item">
+          <label className="mb-1.5 block text-xs font-semibold text-theme-3">Dígitos com zero à esquerda</label>
+          <input
+            type="number"
+            min="1"
+            max="10"
+            step="1"
+            value={itemCodePadLength}
+            onChange={(e) => handleItemCodePadLengthChange(Number(e.target.value))}
+            className="w-24 rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+          />
+          <p className="mt-2.5 text-xs text-theme-3">
+            Quando o código é deixado em branco no cadastro, o item recebe um número sequencial completado com zeros à
+            esquerda (ex.: "0001"). Só um mínimo de dígitos — um item além dessa quantidade não é cortado. Não afeta
+            um código digitado manualmente.
           </p>
         </Card>
       )}

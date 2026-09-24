@@ -268,6 +268,24 @@ pub fn update_theme(state: State<AppState>, theme: String) -> Result<(), String>
     Ok(())
 }
 
+/// Same shape as `update_theme` — self-service, always the active session's
+/// own row, never a `user_id` from the frontend. Accessibility preference,
+/// only scales the app's own UI text via the root `font-size` (see
+/// `src/fontScale.ts`); never touches receipt/report PDF generation, which
+/// is entirely backend-rendered with its own fixed point sizes.
+#[tauri::command]
+pub fn update_font_scale(state: State<AppState>, font_scale: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let active_id = state
+        .active_user_id
+        .lock()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Nenhum usuário autenticado".to_string())?;
+    conn.execute("UPDATE users SET font_scale = ?1 WHERE id = ?2", params![font_scale, active_id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Self-service equivalent of `update_user`'s `auto_lock_minutes` field —
 /// any logged-in profile (not just Admin) can change its own idle-lock
 /// timeout, same as `update_theme`.
@@ -313,6 +331,7 @@ mod tests {
         let profile = fetch_profile(&conn, id).unwrap();
         assert!(profile.is_admin);
         assert_eq!(profile.theme, "light");
+        assert_eq!(profile.font_scale, "normal");
         assert_eq!(profile.auto_lock_minutes, None);
 
         let stored_hash: String = conn

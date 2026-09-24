@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 /// `username` is intentionally excluded — it's an internal login key only
 /// (auto-derived from `name`, see `commands::users::slugify`), never shown
 /// or edited through the UI (login picks a profile by id, not by typing it).
-pub const USER_PROFILE_COLUMNS: &str = "id, name, is_admin, active, auto_lock_minutes, theme, last_login_at";
+pub const USER_PROFILE_COLUMNS: &str = "id, name, is_admin, active, auto_lock_minutes, theme, font_scale, last_login_at";
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +24,7 @@ pub struct UserProfile {
     pub active: bool,
     pub auto_lock_minutes: Option<i64>,
     pub theme: String,
+    pub font_scale: String,
     pub last_login_at: Option<String>,
 }
 
@@ -37,7 +38,8 @@ impl UserProfile {
             active: row.get::<_, i64>(3)? != 0,
             auto_lock_minutes: row.get(4)?,
             theme: row.get(5)?,
-            last_login_at: row.get(6)?,
+            font_scale: row.get(6)?,
+            last_login_at: row.get(7)?,
         })
     }
 }

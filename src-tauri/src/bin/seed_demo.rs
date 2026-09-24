@@ -55,6 +55,13 @@ struct ClientSpec {
     /// Days from today; `None` means no reminder set at all.
     reminder_offset: Option<i64>,
     note: &'static str,
+    birth_date: Option<&'static str>,
+    /// `Some(("cpf" | "cnpj", number))` — `number` unformatted, matching how
+    /// `commands::clients::create_client` stores it. Left `None` for most
+    /// clients, same as a real store where not everyone hands over a
+    /// document. The CNPJ used below is Receita Federal/SERPRO's own
+    /// published example for the new alphanumeric format.
+    document: Option<(&'static str, &'static str)>,
 }
 
 struct LineSpec {
@@ -78,7 +85,9 @@ struct SaleSpec {
     general_discount_percent: Option<f64>,
     general_discount_amount: Option<f64>,
     payment_method: &'static str,
-    /// Required (and only meaningful) when `payment_method == "credit"`.
+    /// Required when `payment_method == "credit"`; optional (and purely
+    /// informational — never affects `client_balance`) for every other
+    /// method, same rule as `create_sale`'s own `client_id`.
     client: Option<&'static str>,
     /// "Valor pago agora" — 0.0 means the sale starts fully open.
     credit_paid_now: f64,
@@ -121,11 +130,46 @@ fn items() -> Vec<ItemSpec> {
 
 fn clients() -> Vec<ClientSpec> {
     vec![
-        ClientSpec { name: "Ana Souza", phone: "(11) 98765-4321", reminder_offset: Some(-3), note: "Cliente antiga, sempre paga em dia" },
-        ClientSpec { name: "Bruno Lima", phone: "(11) 97654-3210", reminder_offset: Some(1), note: "" },
-        ClientSpec { name: "Carla Mendes", phone: "(11) 96543-2109", reminder_offset: Some(6), note: "" },
-        ClientSpec { name: "Diego Rocha", phone: "(11) 95432-1098", reminder_offset: Some(20), note: "Já quitou a última compra" },
-        ClientSpec { name: "Elaine Costa", phone: "(11) 94321-0987", reminder_offset: None, note: "" },
+        ClientSpec {
+            name: "Ana Souza",
+            phone: "(11) 98765-4321",
+            reminder_offset: Some(-3),
+            note: "Cliente antiga, sempre paga em dia",
+            birth_date: Some("1985-04-12"),
+            document: Some(("cpf", "52998224725")),
+        },
+        ClientSpec { name: "Bruno Lima", phone: "(11) 97654-3210", reminder_offset: Some(1), note: "", birth_date: None, document: None },
+        ClientSpec { name: "Carla Mendes", phone: "(11) 96543-2109", reminder_offset: Some(6), note: "", birth_date: Some("1998-09-30"), document: None },
+        ClientSpec {
+            name: "Diego Rocha",
+            phone: "(11) 95432-1098",
+            reminder_offset: Some(20),
+            note: "Já quitou a última compra",
+            birth_date: None,
+            document: None,
+        },
+        ClientSpec { name: "Elaine Costa", phone: "(11) 94321-0987", reminder_offset: None, note: "", birth_date: None, document: None },
+        // These two never carry a Crediário balance — only ever identified on
+        // a Dinheiro/Cartão/PIX sale (optional there, see `PaymentModal`),
+        // here specifically to demo the Clientes screen listing everyone, not
+        // just debtors, and to show a purchase history entry for a
+        // non-Crediário method.
+        ClientSpec {
+            name: "Fernando Alves",
+            phone: "(11) 93210-8765",
+            reminder_offset: None,
+            note: "",
+            birth_date: Some("1990-11-02"),
+            document: Some(("cpf", "11223344517")),
+        },
+        ClientSpec {
+            name: "Construtora Horizonte",
+            phone: "(11) 3222-4455",
+            reminder_offset: None,
+            note: "Compra ferragens em volume, paga sempre no cartão",
+            birth_date: None,
+            document: Some(("cnpj", "12ABC34501DE35")),
+        },
     ]
 }
 
@@ -147,10 +191,16 @@ fn sales() -> Vec<SaleSpec> {
         SaleSpec { days_ago: 23, hour: 10, minute: 40, user_id: 2, lines: vec![line("E001", 2), line("F002", 5)], general_discount_percent: None, general_discount_amount: None, payment_method: "card", client: None, credit_paid_now: 0.0, cancelled: false },
         SaleSpec { days_ago: 20, hour: 14, minute: 0, user_id: 1, lines: vec![line("P002", 2)], general_discount_percent: None, general_discount_amount: Some(2.0), payment_method: "pix", client: None, credit_paid_now: 0.0, cancelled: false },
         SaleSpec { days_ago: 18, hour: 11, minute: 25, user_id: 2, lines: vec![line("L002", 1), line("E003", 1)], general_discount_percent: None, general_discount_amount: None, payment_method: "cash", client: None, credit_paid_now: 0.0, cancelled: false },
+        // Cliente identificado numa venda à vista — opcional fora do
+        // Crediário (ver `PaymentModal`), nunca conta pra `client_balance`.
+        SaleSpec { days_ago: 17, hour: 14, minute: 30, user_id: 2, lines: vec![line("F005", 1), line("F001", 4)], general_discount_percent: None, general_discount_amount: None, payment_method: "cash", client: Some("Fernando Alves"), credit_paid_now: 0.0, cancelled: false },
         SaleSpec { days_ago: 15, hour: 16, minute: 15, user_id: 1, lines: vec![line("F003", 1)], general_discount_percent: None, general_discount_amount: None, payment_method: "credit", client: Some("Bruno Lima"), credit_paid_now: 0.0, cancelled: false },
         SaleSpec { days_ago: 12, hour: 9, minute: 50, user_id: 2, lines: vec![line("P001", 10), line("P003", 5)], general_discount_percent: None, general_discount_amount: None, payment_method: "pix", client: None, credit_paid_now: 0.0, cancelled: false },
         SaleSpec { days_ago: 10, hour: 12, minute: 0, user_id: 2, lines: vec![line("E004", 1)], general_discount_percent: None, general_discount_amount: None, payment_method: "credit", client: Some("Diego Rocha"), credit_paid_now: 0.0, cancelled: false },
         SaleSpec { days_ago: 9, hour: 13, minute: 30, user_id: 1, lines: vec![line("E004", 1), line("E006", 1)], general_discount_percent: None, general_discount_amount: None, payment_method: "card", client: None, credit_paid_now: 0.0, cancelled: false },
+        // Same idea, higher-volume B2B-flavored purchase, Cartão instead of
+        // Dinheiro — same client identification rule either way.
+        SaleSpec { days_ago: 8, hour: 8, minute: 45, user_id: 1, lines: vec![line("F001", 15), line("E004", 6)], general_discount_percent: None, general_discount_amount: None, payment_method: "card", client: Some("Construtora Horizonte"), credit_paid_now: 0.0, cancelled: false },
         SaleSpec { days_ago: 7, hour: 15, minute: 40, user_id: 2, lines: vec![LineSpec { item_code: "F005", quantity: 1, discount_percent: Some(15.0), discount_amount: None }, line("F001", 1)], general_discount_percent: None, general_discount_amount: None, payment_method: "cash", client: None, credit_paid_now: 0.0, cancelled: false },
         SaleSpec { days_ago: 6, hour: 10, minute: 10, user_id: 1, lines: vec![line("X001", 2)], general_discount_percent: None, general_discount_amount: None, payment_method: "credit", client: Some("Carla Mendes"), credit_paid_now: 0.0, cancelled: false },
         SaleSpec { days_ago: 6, hour: 18, minute: 0, user_id: 2, lines: vec![line("P001", 4)], general_discount_percent: None, general_discount_amount: None, payment_method: "cash", client: None, credit_paid_now: 0.0, cancelled: false },
@@ -272,9 +322,10 @@ fn seed_clients(conn: &Connection) -> std::collections::HashMap<&'static str, i6
     for spec in clients() {
         let reminder_date = spec.reminder_offset.map(|offset| (Local::now() + Duration::days(offset)).format("%Y-%m-%d").to_string());
         let note = if spec.note.is_empty() { None } else { Some(spec.note) };
+        let (document_type, document_number) = spec.document.map_or((None, None), |(t, n)| (Some(t), Some(n)));
         conn.execute(
-            "INSERT INTO clients (name, phone, reminder_date, note) VALUES (?1, ?2, ?3, ?4)",
-            params![spec.name, spec.phone, reminder_date, note],
+            "INSERT INTO clients (name, phone, reminder_date, note, birth_date, document_type, document_number) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![spec.name, spec.phone, reminder_date, note, spec.birth_date, document_type, document_number],
         )
         .expect("falha ao inserir cliente");
         ids.insert(spec.name, conn.last_insert_rowid());

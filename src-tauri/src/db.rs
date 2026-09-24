@@ -20,6 +20,7 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             active            INTEGER NOT NULL DEFAULT 1,
             auto_lock_minutes INTEGER NULL,
             theme             TEXT    NOT NULL DEFAULT 'light' CHECK (theme IN ('light', 'dark')),
+            font_scale        TEXT    NOT NULL DEFAULT 'normal' CHECK (font_scale IN ('small', 'normal', 'large', 'xlarge')),
             last_login_at     TEXT    NULL,
             created_at        TEXT    NOT NULL DEFAULT (datetime('now'))
         );
@@ -208,6 +209,7 @@ pub fn seed_default_dashboard_layout(conn: &Connection, user_id: i64) -> Result<
 fn migrate_db(conn: &Connection) {
     // Seguro rodar a cada início — o erro de "coluna já existe" é ignorado.
     let _ = conn.execute("ALTER TABLE users ADD COLUMN last_login_at TEXT NULL", []);
+    let _ = conn.execute("ALTER TABLE users ADD COLUMN font_scale TEXT NOT NULL DEFAULT 'normal' CHECK (font_scale IN ('small', 'normal', 'large', 'xlarge'))", []);
     let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN cancelled_at TEXT NULL", []);
     let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN cancelled_by_user_id INTEGER NULL REFERENCES users(id)", []);
     let _ = conn.execute("ALTER TABLE credit_payments ADD COLUMN cancel_authorized_by_user_id INTEGER NULL REFERENCES users(id)", []);
@@ -330,5 +332,39 @@ mod tests {
             [],
         )
         .unwrap();
+    }
+
+    /// Same shape of regression as `migrate_db_adds_new_client_columns_to_a_pre_existing_table`,
+    /// but for `users.font_scale` — a pre-existing `users` table (before this
+    /// column existed) must still end up with it after `migrate_db`.
+    #[test]
+    fn migrate_db_adds_font_scale_to_a_pre_existing_users_table() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        conn.execute_batch(
+            "CREATE TABLE users (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                name              TEXT    NOT NULL,
+                username          TEXT    NOT NULL UNIQUE,
+                password_hash     TEXT    NOT NULL,
+                is_admin          INTEGER NOT NULL DEFAULT 0,
+                active            INTEGER NOT NULL DEFAULT 1,
+                auto_lock_minutes INTEGER NULL,
+                theme             TEXT    NOT NULL DEFAULT 'light' CHECK (theme IN ('light', 'dark')),
+                created_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+            );",
+        )
+        .unwrap();
+
+        init_db(&conn).unwrap();
+        migrate_db(&conn);
+
+        conn.execute(
+            "INSERT INTO users (name, username, password_hash) VALUES ('Usuário Teste', 'usuario.teste', 'hash')",
+            [],
+        )
+        .unwrap();
+        let font_scale: String = conn.query_row("SELECT font_scale FROM users WHERE username = 'usuario.teste'", [], |row| row.get(0)).unwrap();
+        assert_eq!(font_scale, "normal");
     }
 }
