@@ -11,6 +11,7 @@
 - **Novidade:** Tela de Configurações reorganizada em grupos recolhíveis (Perfil e aparência, Loja e recibo, Estoque e precificação, Backup e restauração, Sistema e diagnóstico), com um campo de busca no topo que acha qualquer configuração pelo nome sem precisar saber em qual grupo ela está.
 - **Novidade:** Administrador agora consegue redefinir a senha de qualquer usuário (incluindo outros administradores e a própria conta) direto na tela Usuários, sem precisar saber a senha atual — útil quando alguém esquece a senha.
 - **Novidade:** O relatório "Autorizações de Administrador" agora também mostra as redefinições de senha, junto com descontos, cancelamentos de venda e de pagamento.
+- **Novidade:** Em Configurações → Loja e recibo, dá pra escolher qual impressora o botão "Imprimir" usa — antes ele sempre mandava para a impressora padrão do Windows.
 
 # Stockly — v0.0.3
 

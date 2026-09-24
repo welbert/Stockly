@@ -160,6 +160,7 @@ Stockly/
 │   │   ├── commands/            # auth.rs, users.rs, categories.rs, items.rs, config.rs, sales.rs, receipts.rs, dashboard_layout.rs, dashboard.rs, logging.rs
 │   │   └── bin/seed_demo.rs     # generates demo/stockly-demonstration.db — see demo/README.md
 │   ├── assets/fonts/            # Courier Prime TTFs (SIL OFL) embedded via include_bytes! in receipts.rs — never loaded from disk at runtime
+│   ├── vendor/SumatraPDF.exe    # bundled via tauri.conf.json's bundle.resources, invoked by commands::receipts::print_file — see docs/future.md's Impressão/Recibo section
 │   ├── Cargo.toml
 │   ├── tauri.conf.json          # identifier com.welbert.stockly, productName "Bora Vender"
 │   └── capabilities/default.json
@@ -202,6 +203,7 @@ pnpm add <package>                  # frontend (or pnpm add -D for dev)
 - Monetary math: floats, rounded to 2 decimals after each operation (small, accepted rounding drift on sequential item+order discounts).
 - Backup uses SQLite's `VACUUM INTO` (not a raw file copy) — a raw copy can be inconsistent with an active WAL-mode connection.
 - Stock movement ledger (append-only) is recorded for every quantity change (sale, entrada, ajuste, import, estorno) — no consultation screen yet, needed later for stock-rupture forecasting.
+- Printing (`commands::receipts::print_file`) goes through a bundled **SumatraPDF** portable executable (`src-tauri/vendor/SumatraPDF.exe`, ~20MB, shipped via `tauri.conf.json`'s `bundle.resources`), invoked directly with `-print-to "<name>"`/`-print-to-default` — not the Windows shell's `-Verb Print`, which has no way to target a specific (non-default) printer. `printer_name` (Configurações) is empty by default (uses the Windows default printer).
 
 ## Environment notes
 

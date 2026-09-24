@@ -11,10 +11,12 @@ import {
   getDefaultProfitMargin,
   getItemCodePadLength,
   getLowStockPercent,
+  getPrinterName,
   getReceiptThankYouMessage,
   getReceiptsFolder,
   getStoreInfo,
   getStoreName,
+  listPrinters,
   openLogDir,
   runBackup,
   setBackupFolder,
@@ -22,6 +24,7 @@ import {
   setDefaultProfitMargin,
   setItemCodePadLength,
   setLowStockPercent,
+  setPrinterName,
   setReceiptThankYouMessage,
   setReceiptsFolder,
   setStoreInfo,
@@ -81,13 +84,14 @@ const GROUPS: GroupMeta[] = [
     id: "loja",
     icon: "🧾",
     title: "Loja e recibo",
-    subtitle: "Identidade da loja e conteúdo do PDF de recibo",
+    subtitle: "Identidade da loja, conteúdo e impressão do recibo",
     adminOnly: true,
     fields: {
       storeName: ["Nome da loja"],
       storeInfo: ["Informações adicionais"],
       thankYou: ["Mensagem de agradecimento"],
       receiptsFolder: ["Pasta dos recibos em PDF", "Pasta de recibos"],
+      printerName: ["Impressora do recibo", "Impressora"],
     },
   },
   {
@@ -150,6 +154,8 @@ export function SettingsPage() {
   const [backupFolder, setBackupFolderState] = useState<string | null | undefined>(undefined);
   const [restorePath, setRestorePath] = useState<string | null>(null);
   const [receiptsFolder, setReceiptsFolderState] = useState<ReceiptsFolderInfo | null>(null);
+  const [printerName, setPrinterNameState] = useState<string | null>(null);
+  const [printers, setPrinters] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(["perfil"]));
 
@@ -182,6 +188,12 @@ export function SettingsPage() {
       getReceiptsFolder()
         .then(setReceiptsFolderState)
         .catch((err) => logger.error("falha ao ler pasta de recibos", err));
+      getPrinterName()
+        .then(setPrinterNameState)
+        .catch((err) => logger.error("falha ao ler impressora configurada", err));
+      listPrinters()
+        .then(setPrinters)
+        .catch((err) => logger.error("falha ao listar impressoras", err));
     }
   }, [user]);
 
@@ -386,6 +398,15 @@ export function SettingsPage() {
     }
   }
 
+  async function handlePrinterNameChange(value: string) {
+    setPrinterNameState(value);
+    try {
+      await setPrinterName(value);
+    } catch (err) {
+      logger.error("falha ao salvar impressora do recibo", err);
+    }
+  }
+
   async function handleChooseRestoreFile() {
     let selected: string | string[] | null;
     try {
@@ -534,6 +555,26 @@ export function SettingsPage() {
             </div>
             <p className="mt-2.5 text-xs text-theme-3">
               Vale pra recibos novos a partir de agora — os já gerados continuam onde estavam.
+            </p>
+          </Field>
+
+          <Field visible={fieldVisible(lojaMeta, "printerName") && printerName !== null} span={2}>
+            <label className="mb-1.5 block text-xs font-semibold text-theme-3">Impressora do recibo</label>
+            <select
+              value={printerName ?? ""}
+              onChange={(e) => handlePrinterNameChange(e.target.value)}
+              className="w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+            >
+              <option value="">Impressora padrão do Windows</option>
+              {printers.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2.5 text-xs text-theme-3">
+              Usada pelo botão "Imprimir" (Venda e Histórico de vendas). Deixe em "Impressora padrão do Windows" pra
+              sempre usar a que estiver configurada como padrão no sistema.
             </p>
           </Field>
         </Accordion>

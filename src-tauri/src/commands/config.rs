@@ -195,6 +195,28 @@ pub fn set_receipt_thank_you_message(state: State<AppState>, message: String) ->
     set_config_string(&conn, RECEIPT_THANK_YOU_KEY, message.trim())
 }
 
+pub(crate) const PRINTER_NAME_KEY: &str = "printer_name";
+
+/// Admin-only both ways, matching `get_receipts_folder`/`set_receipts_folder`
+/// — a printing setup detail, not receipt content (both roles still print
+/// through whatever this resolves to, see `commands::receipts::print_file`;
+/// only *choosing* it is gated). Empty (the default) means "usa a impressora
+/// padrão do Windows" — same "empty means fallback" convention as
+/// `store_name`/`store_info`/`receipts_folder`.
+#[tauri::command]
+pub fn get_printer_name(state: State<AppState>) -> Result<String, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    require_admin(&state, &conn)?;
+    config_string(&conn, PRINTER_NAME_KEY)
+}
+
+#[tauri::command]
+pub fn set_printer_name(state: State<AppState>, name: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    require_admin(&state, &conn)?;
+    set_config_string(&conn, PRINTER_NAME_KEY, name.trim())
+}
+
 const CREDIT_ENABLED_KEY: &str = "credit_enabled";
 
 /// Both roles read this — it decides whether "Crediário" shows up as a

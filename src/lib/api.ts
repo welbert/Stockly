@@ -371,6 +371,24 @@ export function clearReceiptsFolder() {
   return call<void>("clear_receipts_folder");
 }
 
+/** Empty = uses the Windows default printer (same "empty means fallback"
+ * convention as `storeName`/`receiptsFolder`). Read by the backend's
+ * `printFile` (`commands::receipts::print_file`) via the bundled
+ * SumatraPDF — see "Key decisions" in CLAUDE.md. */
+export function getPrinterName() {
+  return call<string>("get_printer_name");
+}
+
+export function setPrinterName(name: string) {
+  return call<void>("set_printer_name", { name });
+}
+
+/** Names of the printers installed on this machine, to populate the picker
+ * in Configurações — admin-only, same underlying mechanism `printFile` uses. */
+export function listPrinters() {
+  return call<string[]>("list_printers");
+}
+
 /** `sale_price` sugerido = custo + margem — usado só ao cadastrar um item novo. */
 export function suggestedSalePrice(costPrice: number, profitMarginPercent: number): number {
   return Math.round(costPrice * (1 + profitMarginPercent / 100) * 100) / 100;

@@ -1,4 +1,6 @@
-use crate::commands::config::{config_string, set_config_string, DEFAULT_THANK_YOU_MESSAGE, RECEIPT_THANK_YOU_KEY, STORE_INFO_KEY, STORE_NAME_KEY};
+use crate::commands::config::{
+    config_string, set_config_string, DEFAULT_THANK_YOU_MESSAGE, PRINTER_NAME_KEY, RECEIPT_THANK_YOU_KEY, STORE_INFO_KEY, STORE_NAME_KEY,
+};
 use crate::guard::{active_user_id, require_admin};
 use crate::models::ReceiptsFolderInfo;
 use crate::money::fmt_money;
@@ -9,7 +11,7 @@ use genpdf::{elements, style, Alignment, Document, Element};
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tauri::State;
+use tauri::{Manager, State};
 
 const RECEIPTS_FOLDER_KEY: &str = "receipts_folder";
 
@@ -192,20 +194,65 @@ pub fn regenerate_receipt_pdf(state: State<AppState>, sale_id: i64) -> Result<St
     Ok(path.to_string_lossy().to_string())
 }
 
-/// Windows shell "print" verb (v1 — simplest option; doesn't guarantee a print
-/// dialog appears, that depends on whatever's associated with .pdf on the
-/// user's machine). The path travels via an environment variable, never
-/// interpolated into the PowerShell command string, so a path containing
-/// quotes/special characters can't break out of it.
+/// Prints via a bundled SumatraPDF (`vendor/SumatraPDF.exe`, shipped as a
+/// Tauri resource — `tauri.conf.json`'s `bundle.resources`) — v2, replacing
+/// the Windows shell "print" verb (v1: `Start-Process -Verb Print`), which
+/// has no way to *name* a printer and always targets whichever one Windows
+/// currently has set as default. `-print-to-default` when `printer_name`
+/// (Configurações) is empty (the default — same "empty means fallback"
+/// convention as `store_name`/`receipts_folder`), otherwise `-print-to
+/// "<name>"`. Invoked directly, no shell string involved at all — a path
+/// with quotes/special characters can't break out of anything, since there's
+/// no command string to interpolate into in the first place (stronger than
+/// v1's env-var workaround, which still went through `powershell -Command`).
+/// Fire-and-forget (`spawn`, not `output`) same as v1: SumatraPDF hands the
+/// job to the print spooler and exits immediately with `-print-to`/
+/// `-print-to-default`, there's nothing further to wait on here.
 #[tauri::command]
-pub fn print_file(state: State<AppState>, path: String) -> Result<(), String> {
+pub fn print_file(app: tauri::AppHandle, state: State<AppState>, path: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
     active_user_id(&state)?;
-    Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", "Start-Process -FilePath $env:STOCKLY_PRINT_PATH -Verb Print"])
-        .env("STOCKLY_PRINT_PATH", &path)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let printer_name = config_string(&conn, PRINTER_NAME_KEY)?;
+    drop(conn);
+
+    let sumatra_path =
+        app.path().resolve("vendor/SumatraPDF.exe", tauri::path::BaseDirectory::Resource).map_err(|e| e.to_string())?;
+
+    let mut cmd = Command::new(sumatra_path);
+    if printer_name.is_empty() {
+        cmd.arg("-print-to-default");
+    } else {
+        cmd.args(["-print-to", &printer_name]);
+    }
+    cmd.args(["-silent", &path]);
+    cmd.spawn().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Admin-only — feeds the printer picker in Configurações. Shells out to
+/// PowerShell/WMI, same "no pure-Rust way to do this without a new
+/// dependency" reasoning as printing itself shelling out. `Win32_Printer`
+/// (WMI, via `Get-CimInstance`) rather than the newer `Get-Printer` cmdlet —
+/// WMI is always available on Windows, `Get-Printer` needs the
+/// PrintManagement module present.
+#[tauri::command]
+pub fn list_printers(state: State<AppState>) -> Result<Vec<String>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    require_admin(&state, &conn)?;
+    let output = Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Get-CimInstance -ClassName Win32_Printer | Select-Object -ExpandProperty Name",
+        ])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        return Err("Não foi possível listar as impressoras".to_string());
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
 }
 
 #[tauri::command]
