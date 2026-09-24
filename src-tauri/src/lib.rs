@@ -4,6 +4,7 @@ mod csv_util;
 /// `demo/README.md`) can reuse `init_db`/`migrate_db` instead of duplicating
 /// the schema — nothing else outside this crate depends on it.
 pub mod db;
+mod documents;
 mod guard;
 mod models;
 mod money;

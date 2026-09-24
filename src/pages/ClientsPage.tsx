@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import type { ClientDetail, ClientSummary, CreditPaymentSummary, CreditSaleSummary, UserSummary } from "../lib/api";
+import type { ClientDetail, ClientSaleSummary, ClientSummary, CreditPaymentSummary, UserSummary } from "../lib/api";
 import { getClientDetail, listAdmins, listClients, round2 } from "../lib/api";
 import { Button } from "../components/Button";
 import { CancelCreditPaymentModal } from "../components/CancelCreditPaymentModal";
 import { Card } from "../components/Card";
 import { Checkbox } from "../components/Checkbox";
 import { ClientFormModal } from "../components/ClientFormModal";
+import { formatCnpj } from "../components/CnpjInput";
+import { formatCpf } from "../components/CpfInput";
 import { CreditPaymentModal } from "../components/CreditPaymentModal";
 import { Pagination } from "../components/Pagination";
 import { SaleDetailModal } from "../components/SaleDetailModal";
-import { fmt, fmtDate, fmtDateFull, fmtDateTime, normalize } from "../lib/format";
+import { PAYMENT_METHOD_LABEL, fmt, fmtDate, fmtDateFull, fmtDateTime, normalize } from "../lib/format";
 import { logger } from "../logger";
 
 type SortBy = "reminder" | "name" | "balance";
@@ -41,9 +43,20 @@ function ReminderBadge({ reminderDate }: { reminderDate: string | null }) {
   return <span className="text-theme-3">Lembrete: {fmtDate(reminderDate)}</span>;
 }
 
-function CreditSaleStatusBadge({ sale }: { sale: CreditSaleSummary }) {
+function formatDocument(type: "cpf" | "cnpj" | null, number: string | null): string | null {
+  if (!type || !number) return null;
+  return type === "cpf" ? formatCpf(number) : formatCnpj(number);
+}
+
+function SaleStatusBadge({ sale }: { sale: ClientSaleSummary }) {
   if (sale.status === "cancelled") {
     return <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">Cancelada</span>;
+  }
+  // Only Crediário has a partial/deferred payment concept — every other
+  // method is settled in full at sale time, so there's no "em aberto"/
+  // "parcialmente paga" state to flag for those rows.
+  if (sale.paymentMethod !== "credit") {
+    return <span className="rounded-full bg-theme-hover px-2 py-0.5 text-xs font-semibold text-theme-2">Concluída</span>;
   }
   if (sale.remaining <= 0) {
     return <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold text-success">Quitada</span>;
@@ -55,20 +68,20 @@ function CreditSaleStatusBadge({ sale }: { sale: CreditSaleSummary }) {
   );
 }
 
-export function DevedoresPage() {
+export function ClientsPage() {
   const { user } = useAuth();
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [admins, setAdmins] = useState<UserSummary[]>([]);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("reminder");
-  const [showSettled, setShowSettled] = useState(false);
+  const [onlyOpenBalance, setOnlyOpenBalance] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selected, setSelected] = useState<ClientDetail | null>(null);
-  const [creditSalesPage, setCreditSalesPage] = useState(0);
+  const [salesPage, setSalesPage] = useState(0);
   const [paymentsPage, setPaymentsPage] = useState(0);
   const [editing, setEditing] = useState<ClientSummary | "new" | null>(null);
   const [selectedSaleIds, setSelectedSaleIds] = useState<Set<number>>(new Set());
-  const [payingSales, setPayingSales] = useState<CreditSaleSummary[] | null>(null);
+  const [payingSales, setPayingSales] = useState<ClientSaleSummary[] | null>(null);
   const [viewingSaleId, setViewingSaleId] = useState<number | null>(null);
   const [cancelingPayment, setCancelingPayment] = useState<CreditPaymentSummary | null>(null);
 
@@ -86,7 +99,7 @@ export function DevedoresPage() {
   }, []);
 
   useEffect(() => {
-    setCreditSalesPage(0);
+    setSalesPage(0);
     setPaymentsPage(0);
     setSelectedSaleIds(new Set());
     if (selectedId === null) {
@@ -95,21 +108,29 @@ export function DevedoresPage() {
     }
     getClientDetail(selectedId)
       .then(setSelected)
-      .catch((err) => logger.error("falha ao carregar detalhe do devedor", selectedId, err));
+      .catch((err) => logger.error("falha ao carregar detalhe do cliente", selectedId, err));
   }, [selectedId]);
 
   /** The stat cards always look only at real debtors (open balance),
-   * regardless of the "Mostrar quitados" checkbox below — that checkbox only
-   * affects what shows up in the list/search. */
+   * regardless of the "Mostrar apenas com saldo em aberto" filter below —
+   * that filter only affects what shows up in the list/search. */
   const debtors = useMemo(() => clients.filter((c) => c.balance > 0), [clients]);
 
-  const listedClients = showSettled ? clients : debtors;
+  const listedClients = onlyOpenBalance ? debtors : clients;
 
   const filtered = useMemo(() => {
     const term = normalize(search.trim());
-    const list = listedClients.filter(
-      (c) => !term || normalize(c.name).includes(term) || (c.phone && normalize(c.phone).includes(term)),
-    );
+    // CPF/CNPJ is stored unformatted, uppercase alphanumeric (CNPJ can have
+    // letters now) — strip whatever punctuation the user typed the same way
+    // before comparing, instead of matching only digits.
+    const documentTerm = search.replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
+    const list = listedClients.filter((c) => {
+      if (!term) return true;
+      if (normalize(c.name).includes(term)) return true;
+      if (c.phone && normalize(c.phone).includes(term)) return true;
+      if (documentTerm && c.documentNumber && c.documentNumber.includes(documentTerm)) return true;
+      return false;
+    });
     return [...list].sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name, "pt-BR");
       if (sortBy === "balance") return b.balance - a.balance;
@@ -125,9 +146,9 @@ export function DevedoresPage() {
 
   // Both histories already come back newest-first from the backend, so a
   // plain slice is enough — no re-sorting needed here.
-  const pagedCreditSales = useMemo(
-    () => selected?.creditSales.slice(creditSalesPage * HISTORY_PAGE_SIZE, (creditSalesPage + 1) * HISTORY_PAGE_SIZE) ?? [],
-    [selected, creditSalesPage],
+  const pagedSales = useMemo(
+    () => selected?.sales.slice(salesPage * HISTORY_PAGE_SIZE, (salesPage + 1) * HISTORY_PAGE_SIZE) ?? [],
+    [selected, salesPage],
   );
   const pagedPayments = useMemo(
     () => selected?.payments.slice(paymentsPage * HISTORY_PAGE_SIZE, (paymentsPage + 1) * HISTORY_PAGE_SIZE) ?? [],
@@ -135,7 +156,7 @@ export function DevedoresPage() {
   );
 
   const selectedSales = useMemo(
-    () => selected?.creditSales.filter((s) => selectedSaleIds.has(s.saleId)) ?? [],
+    () => selected?.sales.filter((s) => selectedSaleIds.has(s.saleId)) ?? [],
     [selected, selectedSaleIds],
   );
   const selectedSalesTotal = useMemo(() => round2(selectedSales.reduce((sum, s) => sum + s.remaining, 0)), [selectedSales]);
@@ -153,7 +174,7 @@ export function DevedoresPage() {
     if (selectedId === null) return;
     getClientDetail(selectedId)
       .then(setSelected)
-      .catch((err) => logger.error("falha ao recarregar detalhe do devedor", selectedId, err));
+      .catch((err) => logger.error("falha ao recarregar detalhe do cliente", selectedId, err));
   }
 
   function handleClientSaved(client: ClientSummary) {
@@ -162,7 +183,7 @@ export function DevedoresPage() {
     if (selectedId === client.id) {
       // `setSelectedId` with the same id doesn't re-trigger the effect that
       // fetches the detail (React bails out, same value) — without this,
-      // editing the already-selected debtor left `selected` with stale data.
+      // editing the already-selected client left `selected` with stale data.
       reloadSelected();
     } else {
       setSelectedId(client.id);
@@ -171,11 +192,13 @@ export function DevedoresPage() {
 
   if (!user) return null;
 
+  const documentLabel = selected ? formatDocument(selected.documentType, selected.documentNumber) : null;
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <input
-          placeholder="Buscar devedor por nome ou telefone..."
+          placeholder="Buscar cliente por nome, telefone ou CPF/CNPJ..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="min-w-[220px] max-w-[340px] flex-1 rounded-lg border border-theme-border bg-theme-surface px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
@@ -190,11 +213,11 @@ export function DevedoresPage() {
           <option value="balance">Ordenar por saldo (maior)</option>
         </select>
         <div className="rounded-lg border border-theme-border bg-theme-surface px-3 py-2">
-          <Checkbox label="Mostrar quitados" checked={showSettled} onChange={setShowSettled} />
+          <Checkbox label="Mostrar apenas com saldo em aberto" checked={onlyOpenBalance} onChange={setOnlyOpenBalance} />
         </div>
         <div className="flex-1" />
         <Button variant="primary" onClick={() => setEditing("new")}>
-          + Novo devedor
+          + Novo cliente
         </Button>
       </div>
 
@@ -214,7 +237,7 @@ export function DevedoresPage() {
       </div>
 
       <div className="grid grid-cols-[340px_1fr] items-start gap-4">
-        <Card title="Devedores" hint={sortBy === "reminder" ? "ordenado por lembrete" : undefined}>
+        <Card title="Clientes" hint={sortBy === "reminder" ? "ordenado por lembrete" : undefined}>
           <div className="-m-5 flex flex-col">
             {filtered.map((c) => (
               <button
@@ -240,7 +263,7 @@ export function DevedoresPage() {
             ))}
             {filtered.length === 0 && (
               <p className="px-5 py-6 text-center text-sm text-theme-3">
-                {showSettled ? "Nenhum cliente encontrado." : "Nenhum devedor encontrado."}
+                {onlyOpenBalance ? "Nenhum cliente com saldo em aberto encontrado." : "Nenhum cliente encontrado."}
               </p>
             )}
           </div>
@@ -249,7 +272,12 @@ export function DevedoresPage() {
         {selected ? (
           <Card
             title={selected.name}
-            hint={[selected.phone, selected.reminderDate ? `Lembrete: ${fmtDateFull(selected.reminderDate)}` : null]
+            hint={[
+              selected.phone,
+              selected.birthDate ? `Nascimento: ${fmtDate(selected.birthDate)}` : null,
+              documentLabel ? `${selected.documentType === "cpf" ? "CPF" : "CNPJ"}: ${documentLabel}` : null,
+              selected.reminderDate ? `Lembrete: ${fmtDateFull(selected.reminderDate)}` : null,
+            ]
               .filter(Boolean)
               .join(" · ")}
           >
@@ -265,13 +293,14 @@ export function DevedoresPage() {
               </div>
             </div>
 
-            <div className="mb-1.5 text-xs font-semibold text-theme-3">Vendas em Crediário</div>
+            <div className="mb-1.5 text-xs font-semibold text-theme-3">Histórico de compras</div>
             <table className="mb-2 w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-border text-left text-xs uppercase tracking-wide text-theme-3">
                   <th className="w-8 py-2" />
                   <th className="py-2">Recibo</th>
                   <th className="py-2">Data</th>
+                  <th className="py-2">Forma de pagamento</th>
                   <th className="py-2">Valor total</th>
                   <th className="py-2">Saldo restante</th>
                   <th className="py-2">Status</th>
@@ -279,8 +308,8 @@ export function DevedoresPage() {
                 </tr>
               </thead>
               <tbody>
-                {pagedCreditSales.map((s) => {
-                  const selectable = s.status === "completed" && s.remaining > 0;
+                {pagedSales.map((s) => {
+                  const selectable = s.paymentMethod === "credit" && s.status === "completed" && s.remaining > 0;
                   return (
                     <tr key={s.saleId} className={`border-b border-theme-border last:border-0 ${selectedSaleIds.has(s.saleId) ? "bg-primary-soft" : ""}`}>
                       <td className="py-2">
@@ -295,12 +324,15 @@ export function DevedoresPage() {
                         <code className="text-xs">{s.receiptNumber}</code>
                       </td>
                       <td className="py-2 text-theme-1">{fmtDateTime(s.createdAt)}</td>
+                      <td className="py-2 text-theme-1">{PAYMENT_METHOD_LABEL[s.paymentMethod] ?? s.paymentMethod}</td>
                       <td className={`py-2 ${s.status === "cancelled" ? "text-theme-3 line-through" : "text-theme-1"}`}>
                         {fmt(s.total)}
                       </td>
-                      <td className="py-2 font-semibold text-theme-1">{s.status === "cancelled" ? "—" : fmt(s.remaining)}</td>
+                      <td className="py-2 font-semibold text-theme-1">
+                        {s.status === "cancelled" || s.paymentMethod !== "credit" ? "—" : fmt(s.remaining)}
+                      </td>
                       <td className="py-2">
-                        <CreditSaleStatusBadge sale={s} />
+                        <SaleStatusBadge sale={s} />
                       </td>
                       <td className="py-2 text-right">
                         <Button variant="ghost" onClick={() => setViewingSaleId(s.saleId)}>
@@ -310,10 +342,10 @@ export function DevedoresPage() {
                     </tr>
                   );
                 })}
-                {selected.creditSales.length === 0 && (
+                {selected.sales.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-3 text-center text-theme-3">
-                      Nenhuma venda em Crediário ainda.
+                    <td colSpan={8} className="py-3 text-center text-theme-3">
+                      Nenhuma compra registrada ainda.
                     </td>
                   </tr>
                 )}
@@ -331,7 +363,7 @@ export function DevedoresPage() {
                 </Button>
               </div>
             )}
-            <Pagination page={creditSalesPage} pageSize={HISTORY_PAGE_SIZE} total={selected.creditSales.length} onPageChange={setCreditSalesPage} />
+            <Pagination page={salesPage} pageSize={HISTORY_PAGE_SIZE} total={selected.sales.length} onPageChange={setSalesPage} />
 
             <div className="mb-1.5 mt-4 text-xs font-semibold text-theme-3">Pagamentos registrados</div>
             <table className="w-full text-sm">
@@ -394,7 +426,7 @@ export function DevedoresPage() {
           </Card>
         ) : (
           <Card>
-            <p className="text-center text-sm text-theme-3">Selecione um devedor à esquerda pra ver o detalhe.</p>
+            <p className="text-center text-sm text-theme-3">Selecione um cliente à esquerda pra ver o detalhe.</p>
           </Card>
         )}
       </div>
@@ -417,11 +449,11 @@ export function DevedoresPage() {
             setSelectedSaleIds(new Set());
             reloadList();
             setPaymentsPage(0); // jump back to the newest page so the payment just registered is visible
-            // A full payoff drops out of the left list (unless "Mostrar
-            // quitados" is on) — the detail on the right needs to clear too
-            // in that case, or it'd keep showing the debtor view of a client
-            // who isn't one anymore.
-            if (updated.balance > 0 || showSettled) setSelected(updated);
+            // A full payoff drops out of the left list when the "saldo em
+            // aberto" filter is on — the detail on the right needs to clear
+            // too in that case, or it'd keep showing the debtor view of a
+            // client who isn't one anymore.
+            if (updated.balance > 0 || !onlyOpenBalance) setSelected(updated);
             else setSelectedId(null);
           }}
           onClose={() => setPayingSales(null)}

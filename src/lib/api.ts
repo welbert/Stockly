@@ -390,7 +390,7 @@ export type SaleDetail = {
   clientId: number | null;
   clientName: string | null;
   /** Amount of the Crediário debt paid off so far for this specific sale —
-   * whether paid at sale time or later through Devedores. `null` when nothing
+   * whether paid at sale time or later through Clientes. `null` when nothing
    * has been paid on it yet. */
   creditPaid: number | null;
   /** The three `cancel*` fields below are only set once the sale has been
@@ -432,6 +432,9 @@ export function createSale(input: {
   discountAuthorizerId: number | null;
   discountAuthorizerPassword: string | null;
   paymentMethod: PaymentMethod;
+  /** Optional for every payment method — identifies the client on a
+   * Dinheiro/Cartão/PIX sale too, not just Crediário. Mandatory only when
+   * `paymentMethod === "credit"` (enforced server-side). */
   clientId: number | null;
   /** Only used when `paymentMethod === "credit"` — how much the client
    * already paid up front, reducing the Crediário balance this sale opens. */
@@ -607,15 +610,26 @@ export type ClientSummary = {
   phone: string | null;
   reminderDate: string | null;
   note: string | null;
+  birthDate: string | null;
+  /** `"cpf"` or `"cnpj"` — can be set alone (pessoa jurídica known, CNPJ not
+   * on hand yet); a number never comes without a type. */
+  documentType: "cpf" | "cnpj" | null;
+  /** Digits only for CPF, uppercase alphanumeric for CNPJ — never the masked
+   * display string. */
+  documentNumber: string | null;
   /** Open Crediário balance — credited sales minus payments already registered. */
   balance: number;
 };
 
-export type CreditSaleSummary = {
+/** One sale in a client's purchase history, any payment method — `paid`/
+ * `remaining` only carry real meaning for Crediário; every other method is
+ * settled in full at sale time (`paid === total`, `remaining === 0`). */
+export type ClientSaleSummary = {
   saleId: number;
   receiptNumber: string;
   createdAt: string;
   total: number;
+  paymentMethod: PaymentMethod;
   /** Sum of active allocations already applied to this specific sale. */
   paid: number;
   /** `total - paid` — what's still owed on this sale specifically. */
@@ -646,7 +660,7 @@ export type CreditPaymentSummary = {
 };
 
 export type ClientDetail = ClientSummary & {
-  creditSales: CreditSaleSummary[];
+  sales: ClientSaleSummary[];
   payments: CreditPaymentSummary[];
 };
 
@@ -657,7 +671,15 @@ export function listClients() {
   return call<ClientSummary[]>("list_clients");
 }
 
-export function createClient(input: { name: string; phone: string | null; reminderDate: string | null; note: string | null }) {
+export function createClient(input: {
+  name: string;
+  phone: string | null;
+  reminderDate: string | null;
+  note: string | null;
+  birthDate: string | null;
+  documentType: "cpf" | "cnpj" | null;
+  documentNumber: string | null;
+}) {
   return call<ClientSummary>("create_client", input);
 }
 
@@ -670,6 +692,9 @@ export function updateClient(input: {
   phone: string | null;
   reminderDate: string | null;
   note: string | null;
+  birthDate: string | null;
+  documentType: "cpf" | "cnpj" | null;
+  documentNumber: string | null;
   authorizerId: number | null;
   authorizerPassword: string | null;
 }) {
@@ -707,7 +732,7 @@ export function cancelCreditPayment(input: {
   return call<ClientDetail>("cancel_credit_payment", input);
 }
 
-/** Global (all clients) version of `CreditSaleSummary` — every still-
+/** Global (all clients) version of `ClientSaleSummary` — every still-
  * completed Crediário sale, used only by "Inadimplência" (`relatorios/
  * inadimplencia-aging`) to find each client's *oldest* still-open sale
  * (`remaining > 0`), which `listClients()`'s per-client `balance` alone

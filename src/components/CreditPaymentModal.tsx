@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import type { ClientDetail, ClientSummary, CreditSaleSummary, SaleItemDetail } from "../lib/api";
+import type { ClientDetail, ClientSaleSummary, ClientSummary, SaleItemDetail } from "../lib/api";
 import { getSaleDetail, registerCreditPayment, round2 } from "../lib/api";
 import { fmt } from "../lib/format";
 import { logger } from "../logger";
@@ -10,9 +10,10 @@ import { MoneyInput } from "./MoneyInput";
 
 interface CreditPaymentModalProps {
   client: ClientSummary;
-  /** The sales checked in "Vendas em Crediário" — always `remaining > 0`, the
-   * caller never lets a quitada/cancelada row be selectable. */
-  selectedSales: CreditSaleSummary[];
+  /** The sales checked in "Histórico de compras" — always Crediário with
+   * `remaining > 0`, the caller never lets a quitada/cancelada/non-Crediário
+   * row be selectable. */
+  selectedSales: ClientSaleSummary[];
   onSaved: (client: ClientDetail) => void;
   onClose: () => void;
 }

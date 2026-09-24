@@ -12,14 +12,14 @@ interface SaleDetailModalProps {
   admins: UserSummary[];
   requiresAuth: boolean;
   onClose: () => void;
-  /** Lets the caller (Devedores/Histórico de vendas) refresh its own list
+  /** Lets the caller (Clientes/Histórico de vendas) refresh its own list
    * once a cancellation actually goes through — this modal only owns its own
    * copy of the sale. */
   onCancelled?: () => void;
 }
 
-/** "Ver venda" — opened from a debtor's history (Devedores screen) or from
- * Histórico de vendas. Shows "Cancelar/estornar venda" for a still-completed
+/** "Ver venda" — opened from a client's purchase history (Clientes screen) or
+ * from Histórico de vendas. Shows "Cancelar/estornar venda" for a still-completed
  * sale, or a banner with who cancelled/authorized it once it's already been
  * reversed. */
 export function SaleDetailModal({ saleId, admins, requiresAuth, onClose, onCancelled }: SaleDetailModalProps) {

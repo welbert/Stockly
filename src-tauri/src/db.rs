@@ -44,12 +44,15 @@ pub(crate) fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_items_category ON items(category_id);
 
         CREATE TABLE IF NOT EXISTS clients (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            name          TEXT    NOT NULL,
-            phone         TEXT    NULL,
-            reminder_date TEXT    NULL,
-            note          TEXT    NULL,
-            created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            name            TEXT    NOT NULL,
+            phone           TEXT    NULL,
+            reminder_date   TEXT    NULL,
+            note            TEXT    NULL,
+            birth_date      TEXT    NULL,
+            document_type   TEXT    NULL CHECK (document_type IN ('cpf', 'cnpj')),
+            document_number TEXT    NULL,
+            created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
         );
 
         CREATE TABLE IF NOT EXISTS sales (
@@ -212,6 +215,11 @@ fn migrate_db(conn: &Connection) {
     // credit_payments.sale_id (added above, once) is superseded by credit_payment_allocations
     // — dropped instead of kept around unused, since this app has no installs to preserve yet.
     let _ = conn.execute("ALTER TABLE credit_payments DROP COLUMN sale_id", []);
+    let _ = conn.execute("ALTER TABLE clients ADD COLUMN birth_date TEXT NULL", []);
+    let _ = conn.execute("ALTER TABLE clients ADD COLUMN document_type TEXT NULL CHECK (document_type IN ('cpf', 'cnpj'))", []);
+    let _ = conn.execute("ALTER TABLE clients ADD COLUMN document_number TEXT NULL", []);
+    let _ =
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_document_number ON clients(document_number) WHERE document_number IS NOT NULL", []);
     let _ = conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS dashboard_layout (
             id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -290,5 +298,37 @@ mod tests {
         migrate_db(&conn);
         // roda de novo pra garantir que os IF NOT EXISTS sao realmente idempotentes
         init_db(&conn).unwrap();
+    }
+
+    /// Regression test for a real crash: on an already-installed database,
+    /// `clients` exists without `birth_date`/`document_type`/`document_number`
+    /// — `init_db`'s `CREATE TABLE IF NOT EXISTS` is then a no-op, so those
+    /// columns (and the unique index on `document_number`) must come entirely
+    /// from `migrate_db`'s `ALTER TABLE`s, never from a statement inside
+    /// `init_db` that assumes the column already exists.
+    #[test]
+    fn migrate_db_adds_new_client_columns_to_a_pre_existing_table() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        conn.execute_batch(
+            "CREATE TABLE clients (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                name          TEXT    NOT NULL,
+                phone         TEXT    NULL,
+                reminder_date TEXT    NULL,
+                note          TEXT    NULL,
+                created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+            );",
+        )
+        .unwrap();
+
+        init_db(&conn).unwrap();
+        migrate_db(&conn);
+
+        conn.execute(
+            "INSERT INTO clients (name, document_type, document_number) VALUES ('Cliente Teste', 'cpf', '11144477735')",
+            [],
+        )
+        .unwrap();
     }
 }

@@ -90,7 +90,7 @@ export function InadimplenciaAgingPage() {
     // `round2` over the client's aggregate), not summed here from each sale's
     // own `remaining` — summing several already-rounded per-sale `remaining`
     // values and rounding *that* again can drift a cent or two from the
-    // single aggregate rounding `client_balance`/Devedores/Dashboard all show
+    // single aggregate rounding `client_balance`/Clientes/Dashboard all show
     // for the same client. `creditSales` is only still needed for
     // `oldestOpenSale`, which has no equivalent aggregate to reuse.
     const oldestOpenSaleByClient = new Map<number, string>();

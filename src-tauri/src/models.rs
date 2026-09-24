@@ -287,7 +287,7 @@ pub struct SaleDetail {
     pub client_name: Option<String>,
     /// Amount of the Crediário debt paid off so far for this specific sale —
     /// sum of active `credit_payment_allocations` targeting it, whether paid
-    /// at sale time ("Valor pago agora") or later through Devedores. `None`
+    /// at sale time ("Valor pago agora") or later through Clientes. `None`
     /// when nothing has been paid on it yet, or the sale isn't Crediário.
     pub credit_paid: Option<f64>,
     /// The four `cancelled_*`/`cancel_*` fields below are only set once the
@@ -407,10 +407,12 @@ pub struct ReportPdfStatInput {
     pub value: String,
 }
 
-/// A client ("devedor") with their computed Crediário balance — used both by
-/// the Devedores listing (filtered client-side to `balance > 0`, mirroring
-/// how Estoque filters `list_items` client-side) and by the client picker
-/// inside the Venda payment modal (all clients, matched by name).
+/// A client, with their computed Crediário balance — used both by the
+/// Clientes listing (all clients, optionally filtered client-side to
+/// `balance > 0`, mirroring how Estoque filters `list_items` client-side) and
+/// by the client picker inside the Venda payment modal (all clients, matched
+/// by name). Only someone with `balance > 0` is a "devedor" — most clients
+/// never carry a Crediário balance at all.
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientSummary {
@@ -419,21 +421,35 @@ pub struct ClientSummary {
     pub phone: Option<String>,
     pub reminder_date: Option<String>,
     pub note: Option<String>,
+    pub birth_date: Option<String>,
+    /// `"cpf"` or `"cnpj"` — can be set alone (client known to be pessoa
+    /// jurídica, say, but their CNPJ wasn't on hand at registration time)
+    /// without `document_number`; the reverse (a number with no type) never
+    /// happens, enforced in `commands::clients`.
+    pub document_type: Option<String>,
+    /// Digits only for CPF, uppercase alphanumeric for CNPJ — never the
+    /// masked/formatted display string.
+    pub document_number: Option<String>,
     pub balance: f64,
 }
 
+/// One sale in a client's purchase history, any payment method — `paid`/
+/// `remaining` only carry real meaning for Crediário (the one method with
+/// partial/deferred payment); every other method is settled in full at sale
+/// time, so those rows always report `paid == total` and `remaining == 0`.
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct CreditSaleSummary {
+pub struct ClientSaleSummary {
     pub sale_id: i64,
     pub receipt_number: String,
     pub created_at: String,
     pub total: f64,
+    pub payment_method: String,
     /// Sum of active (non-cancelled-payment) `credit_payment_allocations` for
     /// this sale — `total - paid` is what's still owed on it specifically.
     pub paid: f64,
     pub remaining: f64,
-    /// `"completed"` or `"cancelled"` — so Devedores can flag a reversed sale
+    /// `"completed"` or `"cancelled"` — so Clientes can flag a reversed sale
     /// without needing to open "Ver venda" to find out.
     pub status: String,
 }
@@ -473,12 +489,15 @@ pub struct ClientDetail {
     pub phone: Option<String>,
     pub reminder_date: Option<String>,
     pub note: Option<String>,
+    pub birth_date: Option<String>,
+    pub document_type: Option<String>,
+    pub document_number: Option<String>,
     pub balance: f64,
-    pub credit_sales: Vec<CreditSaleSummary>,
+    pub sales: Vec<ClientSaleSummary>,
     pub payments: Vec<CreditPaymentSummary>,
 }
 
-/// Global (all clients) version of `CreditSaleSummary` — every still-open
+/// Global (all clients) version of `ClientSaleSummary` — every still-open
 /// Crediário sale, used only by the "Inadimplência" report's aging
 /// computation (`commands::clients::list_credit_sales`), which needs each
 /// client's *oldest* open sale date, not just their current total balance.

@@ -1,5 +1,12 @@
 # Stockly — Não lançado
 
+## Novidades
+
+- **Novidade:** A tela de Devedores agora é a tela de Clientes — lista todos os clientes cadastrados, não só quem está devendo, e um filtro mostra só quem tem saldo em aberto quando precisar.
+- **Novidade:** Agora dá pra identificar o cliente em qualquer forma de pagamento (Dinheiro, Cartão, PIX), não só no Crediário — é opcional, direto na tela de finalizar venda.
+- **Novidade:** O detalhe do cliente mostra o histórico completo de compras (qualquer forma de pagamento), não só as vendas no Crediário.
+- **Novidade:** Cadastro de cliente ganhou data de nascimento e CPF/CNPJ (com validação), além dos campos que já existiam.
+
 # Stockly — v0.0.3
 
 ## Novidades

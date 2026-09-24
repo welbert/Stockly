@@ -11,7 +11,7 @@ use chrono::{Datelike, Duration, Local};
 use rusqlite::{params, Connection};
 use tauri::State;
 
-/// Same threshold as `DevedoresPage.tsx`'s `ReminderBadge` — kept in sync by
+/// Same threshold as `ClientsPage.tsx`'s `ReminderBadge` — kept in sync by
 /// hand since there's no shared Rust/TS date-rules module yet; bump both if
 /// this ever changes.
 const REMINDER_WARNING_DAYS: i64 = 7;

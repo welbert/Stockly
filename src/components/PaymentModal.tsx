@@ -43,7 +43,12 @@ interface PaymentModalProps {
 
 /** Crediário is a payment method like any other, plus an inline step to
  * pick/add the client the debt goes to — never leaves this modal, so the
- * sale in progress is never lost. */
+ * sale in progress is never lost. Every other method (Dinheiro/Cartão/PIX)
+ * offers the same inline step, just optional and collapsed by default behind
+ * "+ Identificar cliente" — most sales stay anonymous, so it can't compete
+ * visually with the default flow. `creditEnabled` only controls whether the
+ * "Crediário" method itself exists; identifying a client on any other method
+ * doesn't depend on Crediário being enabled at all. */
 export function PaymentModal({ total, submitting, error, creditEnabled, onConfirm, onClose }: PaymentModalProps) {
   const methods = creditEnabled ? ALL_METHODS : ALL_METHODS.filter((m) => m.value !== "credit");
   const [method, setMethod] = useState<PaymentMethod>("cash");
@@ -61,22 +66,27 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
   const [clientError, setClientError] = useState<string | null>(null);
   const [savingClient, setSavingClient] = useState(false);
   const [confirmDiscardClient, setConfirmDiscardClient] = useState(false);
+  // Only meaningful outside Crediário — there the picker is always shown
+  // (mandatory); everywhere else it starts collapsed behind "+ Identificar
+  // cliente" and this is what expands it.
+  const [showOptionalClient, setShowOptionalClient] = useState(false);
   const clientInputRef = useRef<HTMLInputElement>(null);
   const submitButtonRef = useRef<HTMLButtonElement>(null);
 
   const newClientDirty =
     newClientName.trim() !== "" || newClientPhone.trim() !== "" || newClientReminder !== "" || newClientNote.trim() !== "";
 
+  const clientPickerVisible = method === "credit" || showOptionalClient || selectedClient !== null || addingClient;
+
   useEffect(() => {
-    if (!creditEnabled) return;
     listClients()
       .then(setClients)
       .catch((err) => logger.error("falha ao listar clientes", err));
-  }, [creditEnabled]);
+  }, []);
 
   useEffect(() => {
-    if (method === "credit" && !selectedClient && !addingClient) clientInputRef.current?.focus();
-  }, [method, selectedClient, addingClient]);
+    if (clientPickerVisible && !selectedClient && !addingClient) clientInputRef.current?.focus();
+  }, [clientPickerVisible, selectedClient, addingClient]);
 
   const clientSuggestions = clientSuggestionsFor(clientQuery, clients);
 
@@ -85,6 +95,21 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
     setClientQuery("");
     setClientError(null);
     setCreditPaidNow(0);
+  }
+
+  function handleRemoveClient() {
+    setSelectedClient(null);
+    setCreditPaidNow(0);
+    // Outside Crediário the picker itself is optional — removing the client
+    // collapses it back to "+ Identificar cliente" instead of leaving an
+    // empty search box open. Crediário always needs someone, so there it
+    // just goes back to search ("Trocar").
+    if (method !== "credit") setShowOptionalClient(false);
+  }
+
+  function collapseOptionalClient() {
+    setShowOptionalClient(false);
+    setClientQuery("");
   }
 
   function startAddClient() {
@@ -121,6 +146,9 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
         phone: newClientPhone.trim() || null,
         reminderDate: newClientReminder || null,
         note: newClientNote.trim() || null,
+        birthDate: null,
+        documentType: null,
+        documentNumber: null,
       });
       setClients((prev) => [...prev, created]);
       selectClient(created);
@@ -160,12 +188,14 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    onConfirm(method, method === "credit" ? selectedClient!.id : null, method === "credit" && effectiveCreditPaidNow > 0 ? effectiveCreditPaidNow : null);
+    const clientId = selectedClient ? selectedClient.id : null;
+    onConfirm(method, clientId, method === "credit" && effectiveCreditPaidNow > 0 ? effectiveCreditPaidNow : null);
   }
 
   function confirmWith(m: PaymentMethod) {
     if (m === "credit" && (!selectedClient || manualCreditInvalid)) return;
-    onConfirm(m, m === "credit" ? selectedClient!.id : null, m === "credit" && effectiveCreditPaidNow > 0 ? effectiveCreditPaidNow : null);
+    const clientId = selectedClient ? selectedClient.id : null;
+    onConfirm(m, clientId, m === "credit" && effectiveCreditPaidNow > 0 ? effectiveCreditPaidNow : null);
   }
 
   /** `←`/`→` move both the selection and focus between the method buttons —
@@ -206,6 +236,144 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
     }
   }
 
+  /** The three states of the client picker (selected / adding / searching)
+   * are shared between Crediário (always shown, mandatory) and every other
+   * method (shown only once expanded, optional) — only the wrapper around
+   * this and the store-credit/"Valor pago agora" block differ by method. */
+  function renderClientPicker() {
+    if (selectedClient) {
+      return (
+        <div>
+          <div className="flex items-center justify-between rounded-lg border border-theme-border bg-primary-soft px-3 py-2.5">
+            <div>
+              <div className="text-sm font-semibold text-theme-1">{selectedClient.name}</div>
+              {method === "credit" && (
+                <div className="text-xs text-theme-3">
+                  {hasStoreCredit ? `Crédito com a loja: ${fmt(storeCredit)}` : `Saldo atual: ${fmt(selectedClient.balance)}`}
+                </div>
+              )}
+            </div>
+            <Button type="button" variant="secondary" onClick={handleRemoveClient}>
+              {method === "credit" ? "Trocar" : "Remover"}
+            </Button>
+          </div>
+          {method === "credit" && (
+            <div className="mt-3">
+              {hasStoreCredit ? (
+                <div className="rounded-lg border border-success/30 bg-success/10 px-3 py-2.5 text-xs">
+                  <p className="font-semibold text-success">Cliente possui saldo com a loja</p>
+                  <p className="mt-1 text-theme-3">
+                    {appliedStoreCredit >= total
+                      ? "O saldo cobre o valor total da venda — será quitada automaticamente."
+                      : `${fmt(appliedStoreCredit)} do saldo serão usados automaticamente nesta venda. Saldo Crediário após: ${fmt(round2(total - appliedStoreCredit))}.`}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <label className="mb-1 block text-xs font-semibold text-theme-3">Valor pago agora (opcional)</label>
+                  <MoneyInput value={creditPaidNow} onChange={setCreditPaidNow} max={total} autoFocus />
+                  {manualCreditInvalid ? (
+                    <p className="mt-1 text-[11px] text-danger">
+                      Isso é o valor total da venda — pra pagamento total, escolha Dinheiro, Cartão ou PIX em vez de Crediário.
+                    </p>
+                  ) : (
+                    creditPaidNow > 0 && (
+                      <p className="mt-1 text-[11px] text-theme-3">
+                        Saldo Crediário após esta venda: {fmt(round2(selectedClient.balance + total - creditPaidNow))}
+                      </p>
+                    )
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (addingClient) {
+      return (
+        <div className="rounded-lg bg-theme-raised p-3" onKeyDown={handleNewClientKeyDown}>
+          <label className="mb-1 block text-xs font-semibold text-theme-3">Nome *</label>
+          <input
+            required
+            autoFocus
+            value={newClientName}
+            onChange={(e) => setNewClientName(e.target.value)}
+            placeholder="Ex.: Maria Fernandes"
+            className="mb-2 w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+          />
+          <div className="mb-2 grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-theme-3">Telefone</label>
+              <PhoneInput value={newClientPhone} onChange={setNewClientPhone} placeholder="(opcional)" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-theme-3">Data de lembrete</label>
+              <input
+                type="date"
+                value={newClientReminder}
+                onChange={(e) => setNewClientReminder(e.target.value)}
+                className="w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+              />
+            </div>
+          </div>
+          <label className="mb-1 block text-xs font-semibold text-theme-3">Observação</label>
+          <input
+            value={newClientNote}
+            onChange={(e) => setNewClientNote(e.target.value)}
+            placeholder="Texto livre (opcional)"
+            className="w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+          />
+          {clientError && <p className="mt-2 text-xs text-danger">{clientError}</p>}
+          <div className="mt-2 flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={requestCancelAddClient}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="primary" disabled={savingClient} onClick={handleSaveNewClient}>
+              Salvar e vincular
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <input
+          ref={clientInputRef}
+          value={clientQuery}
+          onChange={(e) => setClientQuery(e.target.value)}
+          onKeyDown={handleClientInputKeyDown}
+          placeholder="Buscar cliente por nome..."
+          className="w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+        />
+        <div className="mt-2 overflow-hidden rounded-lg border border-theme-border">
+          {clientSuggestions.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => selectClient(c)}
+              className="flex w-full items-center justify-between border-b border-theme-border px-3 py-2 text-left text-sm hover:bg-theme-hover"
+            >
+              <span className="text-theme-1">{c.name}</span>
+              <span className="text-xs text-theme-3">
+                {c.balance < 0 ? `Crédito com a loja: ${fmt(round2(-c.balance))}` : `Saldo atual: ${fmt(c.balance)}`}
+              </span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={startAddClient}
+            className="w-full px-3 py-2 text-left text-sm font-semibold text-primary hover:bg-theme-hover"
+          >
+            + Adicionar novo cliente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <Modal title="Finalizar venda" onClose={submitting ? undefined : onClose}>
@@ -238,136 +406,26 @@ export function PaymentModal({ total, submitting, error, creditEnabled, onConfir
             <Kbd>←</Kbd>/<Kbd>→</Kbd> escolher forma de pagamento
           </p>
 
-          {method === "credit" && (
+          {clientPickerVisible ? (
             <div className="mt-4 border-t border-theme-border pt-4">
-              {selectedClient ? (
-                <div>
-                  <div className="flex items-center justify-between rounded-lg border border-theme-border bg-primary-soft px-3 py-2.5">
-                    <div>
-                      <div className="text-sm font-semibold text-theme-1">{selectedClient.name}</div>
-                      <div className="text-xs text-theme-3">
-                        {hasStoreCredit ? `Crédito com a loja: ${fmt(storeCredit)}` : `Saldo atual: ${fmt(selectedClient.balance)}`}
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => {
-                        setSelectedClient(null);
-                        setCreditPaidNow(0);
-                      }}
-                    >
-                      Trocar
-                    </Button>
-                  </div>
-                  <div className="mt-3">
-                    {hasStoreCredit ? (
-                      <div className="rounded-lg border border-success/30 bg-success/10 px-3 py-2.5 text-xs">
-                        <p className="font-semibold text-success">Cliente possui saldo com a loja</p>
-                        <p className="mt-1 text-theme-3">
-                          {appliedStoreCredit >= total
-                            ? "O saldo cobre o valor total da venda — será quitada automaticamente."
-                            : `${fmt(appliedStoreCredit)} do saldo serão usados automaticamente nesta venda. Saldo Crediário após: ${fmt(round2(total - appliedStoreCredit))}.`}
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        <label className="mb-1 block text-xs font-semibold text-theme-3">Valor pago agora (opcional)</label>
-                        <MoneyInput value={creditPaidNow} onChange={setCreditPaidNow} max={total} autoFocus />
-                        {manualCreditInvalid ? (
-                          <p className="mt-1 text-[11px] text-danger">
-                            Isso é o valor total da venda — pra pagamento total, escolha Dinheiro, Cartão ou PIX em vez de Crediário.
-                          </p>
-                        ) : (
-                          creditPaidNow > 0 && (
-                            <p className="mt-1 text-[11px] text-theme-3">
-                              Saldo Crediário após esta venda: {fmt(round2(selectedClient.balance + total - creditPaidNow))}
-                            </p>
-                          )
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : addingClient ? (
-                <div className="rounded-lg bg-theme-raised p-3" onKeyDown={handleNewClientKeyDown}>
-                  <label className="mb-1 block text-xs font-semibold text-theme-3">Nome *</label>
-                  <input
-                    required
-                    autoFocus
-                    value={newClientName}
-                    onChange={(e) => setNewClientName(e.target.value)}
-                    placeholder="Ex.: Maria Fernandes"
-                    className="mb-2 w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
-                  />
-                  <div className="mb-2 grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-theme-3">Telefone</label>
-                      <PhoneInput value={newClientPhone} onChange={setNewClientPhone} placeholder="(opcional)" />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-theme-3">Data de lembrete</label>
-                      <input
-                        type="date"
-                        value={newClientReminder}
-                        onChange={(e) => setNewClientReminder(e.target.value)}
-                        className="w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
-                      />
-                    </div>
-                  </div>
-                  <label className="mb-1 block text-xs font-semibold text-theme-3">Observação</label>
-                  <input
-                    value={newClientNote}
-                    onChange={(e) => setNewClientNote(e.target.value)}
-                    placeholder="Texto livre (opcional)"
-                    className="w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
-                  />
-                  {clientError && <p className="mt-2 text-xs text-danger">{clientError}</p>}
-                  <div className="mt-2 flex justify-end gap-2">
-                    <Button type="button" variant="secondary" onClick={requestCancelAddClient}>
-                      Cancelar
-                    </Button>
-                    <Button type="button" variant="primary" disabled={savingClient} onClick={handleSaveNewClient}>
-                      Salvar e vincular
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-theme-3">Cliente</label>
-                  <input
-                    ref={clientInputRef}
-                    value={clientQuery}
-                    onChange={(e) => setClientQuery(e.target.value)}
-                    onKeyDown={handleClientInputKeyDown}
-                    placeholder="Buscar cliente por nome..."
-                    className="w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
-                  />
-                  <div className="mt-2 overflow-hidden rounded-lg border border-theme-border">
-                    {clientSuggestions.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => selectClient(c)}
-                        className="flex w-full items-center justify-between border-b border-theme-border px-3 py-2 text-left text-sm hover:bg-theme-hover"
-                      >
-                        <span className="text-theme-1">{c.name}</span>
-                        <span className="text-xs text-theme-3">
-                          {c.balance < 0 ? `Crédito com a loja: ${fmt(round2(-c.balance))}` : `Saldo atual: ${fmt(c.balance)}`}
-                        </span>
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={startAddClient}
-                      className="w-full px-3 py-2 text-left text-sm font-semibold text-primary hover:bg-theme-hover"
-                    >
-                      + Adicionar novo cliente
-                    </button>
-                  </div>
-                </div>
-              )}
+              <div className="mb-2 flex items-center justify-between">
+                <label className="block text-xs font-semibold text-theme-3">{method === "credit" ? "Cliente" : "Cliente (opcional)"}</label>
+                {method !== "credit" && !selectedClient && !addingClient && (
+                  <button type="button" onClick={collapseOptionalClient} className="text-xs text-theme-3 hover:text-theme-1 hover:underline">
+                    Cancelar
+                  </button>
+                )}
+              </div>
+              {renderClientPicker()}
             </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowOptionalClient(true)}
+              className="mt-4 text-xs font-semibold text-primary hover:underline"
+            >
+              + Identificar cliente (opcional)
+            </button>
           )}
 
           {error && <p className="mt-3 text-xs text-danger">{error}</p>}

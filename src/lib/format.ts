@@ -8,7 +8,7 @@ export function fmtDate(iso: string): string {
 }
 
 /** Same as `fmtDate` but with the year — used where the date alone (dd/mm)
- * would be ambiguous, e.g. a client's Devedores detail header. */
+ * would be ambiguous, e.g. a client's Clientes detail header. */
 export function fmtDateFull(iso: string): string {
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;

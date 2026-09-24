@@ -213,7 +213,7 @@ pub(crate) fn fetch_sale_detail(
     })
 }
 
-/// Read-only sale lookup — used by "Ver venda" (Devedores' linked-sale
+/// Read-only sale lookup — used by "Ver venda" (Clientes' linked-sale
 /// detail), which doesn't need a fresh PDF, just the stored facts.
 #[tauri::command]
 pub fn get_sale_detail(state: State<AppState>, sale_id: i64) -> Result<SaleDetail, String> {
@@ -224,7 +224,7 @@ pub fn get_sale_detail(state: State<AppState>, sale_id: i64) -> Result<SaleDetai
 
 /// Every sale ever, newest first — any logged-in profile. Frontend filters by
 /// date range/receipt/cliente/operador client-side (same "fetch everything,
-/// filter in the component" convention as Estoque/Devedores). Line items
+/// filter in the component" convention as Estoque/Clientes). Line items
 /// aren't included here — that's a separate `get_sale_detail` round-trip once
 /// a specific sale is opened, so this listing stays light even as sales pile
 /// up over time.
@@ -505,7 +505,7 @@ pub fn export_sales_report_pdf(
 ///
 /// Never touches `credit_payments`/`credit_payment_allocations`, even if this
 /// was a Crediário sale that already had money applied to it (at sale time or
-/// later, via Devedores): that amount simply becomes floating credit for the
+/// later, via Clientes): that amount simply becomes floating credit for the
 /// client once this sale drops out of the completed-sales sum behind
 /// `client_balance` — decided over auto-reversing it (a prior version of this
 /// command did auto-cancel a "Valor pago agora" down payment here, to avoid
@@ -578,6 +578,9 @@ pub fn create_sale(
     discount_authorizer_id: Option<i64>,
     discount_authorizer_password: Option<String>,
     payment_method: String,
+    // Optional for every payment method — the cashier can identify a client
+    // on a Dinheiro/Cartão/PIX sale too, not just Crediário. Only Crediário
+    // requires it (checked below).
     client_id: Option<i64>,
     // Only meaningful when `payment_method == "credit"` — the customer
     // already has part of the money on hand, so a `credit_payments` row (with
@@ -592,7 +595,6 @@ pub fn create_sale(
     if !VALID_PAYMENT_METHODS.contains(&payment_method.as_str()) {
         return Err("Forma de pagamento inválida".to_string());
     }
-    let client_id = if payment_method == "credit" { client_id } else { None };
     if payment_method == "credit" && client_id.is_none() {
         return Err("Selecione um cliente para Crediário".to_string());
     }

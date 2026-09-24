@@ -38,11 +38,14 @@ export function CancelSaleModal({ sale, requiresAuth, admins, onCancelled, onClo
   const [client, setClient] = useState<ClientDetail | null>(null);
 
   useEffect(() => {
-    if (sale.clientId === null) return;
+    // Only meaningful for a Crediário sale — a client identified on a
+    // Dinheiro/Cartão/PIX sale (optional, see `PaymentModal`) has no debt
+    // for cancelling this sale to reduce, so there's nothing to fetch.
+    if (sale.clientId === null || sale.paymentMethod !== "credit") return;
     getClientDetail(sale.clientId)
       .then(setClient)
-      .catch((err) => logger.error("falha ao carregar detalhe do devedor", sale.clientId, err));
-  }, [sale.clientId]);
+      .catch((err) => logger.error("falha ao carregar detalhe do cliente", sale.clientId, err));
+  }, [sale.clientId, sale.paymentMethod]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -80,16 +83,20 @@ export function CancelSaleModal({ sale, requiresAuth, admins, onCancelled, onClo
     <Modal title={`Cancelar venda #${sale.receiptNumber}`} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         <p className="text-sm text-theme-2">
-          {sale.clientId !== null && client ? (
-            <>
-              Essa ação vai reduzir o débito de <span className="font-semibold text-theme-1">{sale.clientName}</span> de{" "}
-              <span className="font-semibold text-theme-1">{fmt(client.balance)}</span> para{" "}
-              <span className="font-semibold text-theme-1">{fmt(round2(client.balance - sale.total))}</span>, já que a
-              venda de <span className="font-semibold text-theme-1">{fmt(sale.total)}</span> será cancelada, e devolve os
-              itens ao estoque.
-            </>
+          {sale.paymentMethod === "credit" ? (
+            client ? (
+              <>
+                Essa ação vai reduzir o débito de <span className="font-semibold text-theme-1">{sale.clientName}</span> de{" "}
+                <span className="font-semibold text-theme-1">{fmt(client.balance)}</span> para{" "}
+                <span className="font-semibold text-theme-1">{fmt(round2(client.balance - sale.total))}</span>, já que a
+                venda de <span className="font-semibold text-theme-1">{fmt(sale.total)}</span> será cancelada, e devolve os
+                itens ao estoque.
+              </>
+            ) : (
+              <>Devolve os itens ao estoque e reduz o débito de {sale.clientName}.</>
+            )
           ) : (
-            <>Devolve os itens ao estoque{sale.clientName ? ` e reduz o débito de ${sale.clientName}` : ""}.</>
+            <>Devolve os itens ao estoque{sale.clientName ? ` (venda identificada para ${sale.clientName})` : ""}.</>
           )}
         </p>
         {sale.creditPaid !== null && (

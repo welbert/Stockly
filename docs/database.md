@@ -85,15 +85,22 @@ Same shape and purpose as `stock_movements`, just for the two price columns inst
 
 Indexed on `item_id` and `created_at` — the latter added later, same reasoning as `stock_movements.created_at` above: `list_item_price_history`'s `ORDER BY created_at DESC` is what `HistoricoPrecoPage` sorts by.
 
-### `clients` — Crediário debtors
+### `clients`
 | Column | Type | Notes |
 |---|---|---|
 | `id` | INTEGER PK | |
 | `name` | TEXT NOT NULL | |
 | `phone` | TEXT NULL | |
-| `reminder_date` | TEXT NULL | one per client (not per debt) — sorts the "Devedores" screen |
+| `reminder_date` | TEXT NULL | one per client (not per debt) — sorts the Clientes screen |
 | `note` | TEXT NULL | free text |
+| `birth_date` | TEXT NULL | purely informational — no business logic reads it today |
+| `document_type` | TEXT NULL, `CHECK IN ('cpf', 'cnpj')` | can be set alone (client known to be pessoa jurídica, say, with no CNPJ on hand yet) — `document_number` requires it, but not the reverse. Also doubles as the client's PF/PJ classification, if ever needed for a report — CPF/CNPJ is a fixed 1-to-1 mapping to pessoa física/jurídica in Brazil, so a separate column for that would just duplicate this one |
+| `document_number` | TEXT NULL | digits only for CPF, uppercase alphanumeric for CNPJ — **never** the masked/formatted display string. Validated (format + check digits) in `commands::clients`/`documents.rs` before being stored |
 | `created_at` | TEXT | |
+
+Unique index on `document_number` (partial, `WHERE document_number IS NOT NULL`) — prevents two clients sharing the same CPF/CNPJ; `create_client`/`update_client` translate the constraint violation into a friendly "CPF/CNPJ já cadastrado para outro cliente" error.
+
+CNPJ can now be alphanumeric (Receita Federal's new format, phased in from mid-2026): the first 12 characters may be letters or digits, only the last 2 (check digits) stay numeric. `documents.rs` validates both CPF and CNPJ check digits (module-11), not just length/format.
 
 Not a `users` row — clients never log in.
 
@@ -104,7 +111,7 @@ Not a `users` row — clients never log in.
 | `receipt_sequential` | INTEGER NOT NULL UNIQUE | global, gap-free counter — assigned in the same transaction as the sale, never reused even if PDF generation fails afterward |
 | `receipt_number` | TEXT NOT NULL UNIQUE | formatted `{yyyyMMdd}{receipt_sequential zero-padded to 6 digits}`, kept alongside the raw sequential for direct lookup/search |
 | `user_id` | INTEGER NOT NULL → `users(id)` | who registered the sale |
-| `client_id` | INTEGER NULL → `clients(id)` | only set when a Crediário payment is part of the sale |
+| `client_id` | INTEGER NULL → `clients(id)` | identifies the client on the sale — mandatory when `payment_method == 'credit'`, optional (cashier's choice) for Dinheiro/Cartão/PIX |
 | `subtotal` | REAL, `CHECK (>= 0)` | sum of `sale_items.subtotal` (i.e. already net of item-level discounts) |
 | `discount_percent` / `discount_amount` | REAL NULL, `CHECK` 0–100 / `>= 0` | the *general* (whole-sale) discount, applied on top of `subtotal` |
 | `discount_authorized_by_user_id` / `discount_authorized_at` | INTEGER NULL → `users(id)` / TEXT NULL | which Admin authorized the discount, when the person registering the sale wasn't already an Admin |
@@ -115,9 +122,9 @@ Not a `users` row — clients never log in.
 | `cancel_authorized_by_user_id` | INTEGER NULL → `users(id)` | which Admin authorized it |
 | `created_at` | TEXT | |
 
-Cancelling/reverting a sale (`commands::sales::cancel_sale`, from Histórico de vendas or Devedores' "Ver venda") never deletes the row — it flips `status` to `cancelled` and fills the three `cancelled_*`/`cancel_authorized_*` columns, plus reverses the stock (a `refund`-type row per item in `stock_movements`, only for lines whose item wasn't hard-deleted since). A Crediário client's open balance is **never a stored column** — it's always `SUM(sales.total WHERE client_id = ? AND status = 'completed' AND <a 'credit' sale_payments row exists>) - SUM(credit_payments.amount WHERE client_id = ? AND cancelled_at IS NULL)`, computed on read. Cancelling a Crediário sale reduces the client's balance automatically, just by excluding it from that sum — `cancel_sale` never touches `credit_payments`/`credit_payment_allocations` even if money had already been applied to this sale, at sale time or later: that amount simply becomes floating credit for the client instead of being reversed.
+Cancelling/reverting a sale (`commands::sales::cancel_sale`, from Histórico de vendas or Clientes' "Ver venda") never deletes the row — it flips `status` to `cancelled` and fills the three `cancelled_*`/`cancel_authorized_*` columns, plus reverses the stock (a `refund`-type row per item in `stock_movements`, only for lines whose item wasn't hard-deleted since). A Crediário client's open balance is **never a stored column** — it's always `SUM(sales.total WHERE client_id = ? AND status = 'completed' AND <a 'credit' sale_payments row exists>) - SUM(credit_payments.amount WHERE client_id = ? AND cancelled_at IS NULL)`, computed on read. Cancelling a Crediário sale reduces the client's balance automatically, just by excluding it from that sum — `cancel_sale` never touches `credit_payments`/`credit_payment_allocations` even if money had already been applied to this sale, at sale time or later: that amount simply becomes floating credit for the client instead of being reversed.
 
-Indexed on `client_id` and `status` (the two columns "Devedores" and sale listings filter by), plus `created_at` — added later, once report count grew: almost every Vendas relatório reads through `list_sales`' `ORDER BY created_at DESC`, so this index saves that sort instead of just narrowing rows (the app fetches every sale and filters/aggregates client-side, no `WHERE` on date — see `docs/commands.md`). Also two partial indexes, `discount_authorized_by_user_id` and `cancel_authorized_by_user_id`, each `WHERE ... IS NOT NULL` — the exact predicate `list_admin_authorizations` filters on for its "desconto concedido"/"venda cancelada" queries.
+Indexed on `client_id` and `status` (the two columns Clientes and sale listings filter by), plus `created_at` — added later, once report count grew: almost every Vendas relatório reads through `list_sales`' `ORDER BY created_at DESC`, so this index saves that sort instead of just narrowing rows (the app fetches every sale and filters/aggregates client-side, no `WHERE` on date — see `docs/commands.md`). Also two partial indexes, `discount_authorized_by_user_id` and `cancel_authorized_by_user_id`, each `WHERE ... IS NOT NULL` — the exact predicate `list_admin_authorizations` filters on for its "desconto concedido"/"venda cancelada" queries.
 
 ### `sale_payments` — payment method(s) per sale
 | Column | Type | Notes |

@@ -1,9 +1,9 @@
 import { ComponentType } from "react";
 import type { CardSize } from "../../lib/api";
+import { ClientesLembreteCard } from "./ClientesLembreteCard";
 import { ComparativoMensalCard } from "./ComparativoMensalCard";
 import { CreditoEmAbertoCard } from "./CreditoEmAbertoCard";
 import { DescontosConcedidosCard } from "./DescontosConcedidosCard";
-import { DevedoresLembreteCard } from "./DevedoresLembreteCard";
 import { EstoqueBaixoCard } from "./EstoqueBaixoCard";
 import { FormasPagamentoCard } from "./FormasPagamentoCard";
 import { ItensEmEstoqueCard } from "./ItensEmEstoqueCard";
@@ -142,11 +142,15 @@ export const CARD_CATALOG: Record<CardKey, CardCatalogEntry> = {
     allowedSizes: ["1x1"],
     component: ComparativoMensalCard,
   },
+  // Card key stays "devedores_lembrete" even after the Devedores→Clientes
+  // rename — it's persisted per-Admin in `dashboard_layout.card_key`, and
+  // renaming it would silently drop this card from any layout saved before
+  // this change (see catalog key vs. `label` in the rest of this file).
   devedores_lembrete: {
-    label: "Devedores com lembrete",
+    label: "Clientes com lembrete",
     description: "Clientes com saldo em aberto cujo lembrete está próximo ou vencido.",
     allowedSizes: ["2x2", "2x3", "4x2"],
-    component: DevedoresLembreteCard,
+    component: ClientesLembreteCard,
   },
   credito_em_aberto: {
     label: "Total em Crediário em aberto",

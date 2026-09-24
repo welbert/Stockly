@@ -21,7 +21,7 @@ interface CancelCreditPaymentModalProps {
 
 /** Cancels (soft-delete) a payment registered by mistake — never deleted,
  * just marked with who cancelled it and why (see "Pagamentos registrados" in
- * `DevedoresPage`). Reverses a financial entry, so it requires admin
+ * `ClientsPage`). Reverses a financial entry, so it requires admin
  * authorization, unlike registering the payment itself. */
 export function CancelCreditPaymentModal({ payment, client, requiresAuth, admins, onCancelled, onClose }: CancelCreditPaymentModalProps) {
   const balanceAfter = round2(client.balance + payment.amount);

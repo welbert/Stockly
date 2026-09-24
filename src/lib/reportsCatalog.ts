@@ -46,7 +46,7 @@ export const REPORT_GROUPS: ReportGroupDef[] = [
   },
   {
     id: "crediario",
-    label: "Crediário/Devedores",
+    label: "Crediário/Clientes",
     reports: [
       { slug: "inadimplencia-aging", label: "Inadimplência", subtitle: "Saldo em aberto agrupado por faixa de atraso" },
       { slug: "pagamentos-recebidos", label: "Pagamentos recebidos", subtitle: "Quitações de Crediário no período" },

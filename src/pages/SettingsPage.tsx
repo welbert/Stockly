@@ -347,7 +347,7 @@ export function SettingsPage() {
         <Card title="Crediário">
           <Checkbox label="Aceitar Crediário como forma de pagamento" checked={creditEnabled} onChange={handleCreditEnabledChange} />
           <p className="mt-2.5 text-xs text-theme-3">
-            Só pode ser desativado se não houver nenhum devedor com saldo em aberto (tela Devedores).
+            Só pode ser desativado se não houver nenhum cliente com saldo em aberto (tela Clientes).
           </p>
         </Card>
       )}

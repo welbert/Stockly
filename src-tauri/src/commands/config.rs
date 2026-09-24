@@ -165,8 +165,8 @@ pub fn get_credit_enabled(state: State<AppState>) -> Result<bool, String> {
 
 /// Admin-only, and blocked while any client still has an open Crediário
 /// balance — same "reconfirmation not needed, but must be structurally safe"
-/// spirit as the other Configurações locks ("Crediário e Devedores" > "trava
-/// de desativação").
+/// spirit as the other Configurações locks ("Crediário" > "trava de
+/// desativação").
 #[tauri::command]
 pub fn set_credit_enabled(state: State<AppState>, enabled: bool) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;

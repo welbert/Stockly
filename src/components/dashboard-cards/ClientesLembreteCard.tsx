@@ -2,12 +2,12 @@ import { Card } from "../Card";
 import { fmtDate } from "../../lib/format";
 import type { DashboardCardProps } from "./types";
 
-/** Same overdue/upcoming window as Devedores' `ReminderBadge` — only clients
+/** Same overdue/upcoming window as Clientes' `ReminderBadge` — only clients
  * who still owe (`balance > 0`) show up here, see `docs/commands.md`'s
  * `get_dashboard_data`. */
-export function DevedoresLembreteCard({ data }: DashboardCardProps) {
+export function ClientesLembreteCard({ data }: DashboardCardProps) {
   return (
-    <Card title="Devedores com lembrete" hint="próximo ou vencido" className="flex h-full flex-col">
+    <Card title="Clientes com lembrete" hint="próximo ou vencido" className="flex h-full flex-col">
       <div className="h-full overflow-y-auto">
         {data.remindersDue.length === 0 ? (
           <p className="text-sm text-theme-3">Nenhum lembrete próximo ou vencido.</p>

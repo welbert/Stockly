@@ -22,8 +22,8 @@ App desktop de controle de estoque e vendas (PDV) para uso local em um único co
 - **Venda (PDV) rápida via teclado** — busca de item por código ou nome, atalhos para desconto, cancelamento e finalização, sem depender do mouse
 - **Recibo em PDF** — gerado a cada venda, numeração sequencial, com opção de reimprimir/regerar a qualquer momento
 - **Histórico de vendas** — busca por recibo, cliente ou operador, com cancelamento/estorno (devolve o item ao estoque automaticamente)
-- **Crediário e Devedores** — venda fiado vinculada a um cliente, controle de saldo em aberto, lembrete de cobrança e histórico de pagamentos
-- **Dashboard personalizável** — cards de vendas, estoque baixo, valores recebidos e devedores, arrastáveis e redimensionáveis
+- **Clientes e Crediário** — cadastro de cliente (CPF/CNPJ, data de nascimento), identificação opcional em qualquer venda, venda fiado com controle de saldo em aberto, lembrete de cobrança e histórico de compras/pagamentos
+- **Dashboard personalizável** — cards de vendas, estoque baixo, valores recebidos e clientes com lembrete, arrastáveis e redimensionáveis
 - **Relatórios** — por categoria (vendas, estoque, crediário, auditoria), incluindo comparativo de períodos, descontos concedidos e inadimplência, todos exportáveis em CSV/PDF
 - **Backup automático do banco** — ao abrir o app e a cada 10 minutos, sem precisar de ação manual
 - **Atualização automática** — o app verifica e instala novas versões sozinho

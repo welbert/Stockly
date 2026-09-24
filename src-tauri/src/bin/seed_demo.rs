@@ -85,7 +85,7 @@ struct SaleSpec {
     cancelled: bool,
 }
 
-/// A later, standalone Crediário settlement (Devedores' "Registrar
+/// A later, standalone Crediário settlement (Clientes' "Registrar
 /// pagamento") — separate from `SaleSpec.credit_paid_now`, which is the
 /// at-sale-time down payment. Targets the Nth credit sale (0-indexed, in the
 /// order credit sales are created) for the named client.
@@ -166,13 +166,13 @@ fn sales() -> Vec<SaleSpec> {
 }
 
 /// One extra Crediário settlement per debtor, days after their sale — gives
-/// Devedores/Relatórios a mix of fully open, partially paid, and (Diego,
+/// Clientes/Relatórios a mix of fully open, partially paid, and (Diego,
 /// seeded directly below, not through a `SaleSpec`) fully quitado clients.
 fn extra_payments() -> Vec<PaymentSpec> {
     vec![
         PaymentSpec { client: "Bruno Lima", credit_sale_index: 0, days_after_sale: 4, amount: 5.0 },
         PaymentSpec { client: "Ana Souza", credit_sale_index: 0, days_after_sale: 10, amount: 20.0 },
-        // Quitado in full — the one client whose Crediário history is fully paid off, to demo Devedores' "Mostrar quitados".
+        // Quitado in full — the one client whose Crediário history is fully paid off, to demo Clientes' "Mostrar apenas com saldo em aberto" filter (unchecked by default, so this client shows up in the plain list too).
         PaymentSpec { client: "Diego Rocha", credit_sale_index: 0, days_after_sale: 3, amount: 9.5 },
     ]
 }
