@@ -243,6 +243,7 @@ pub fn print_file(app: tauri::AppHandle, state: State<AppState>, path: String) -
 pub fn list_printers(state: State<AppState>) -> Result<Vec<String>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     require_admin(&state, &conn)?;
+    drop(conn);
     let output = Command::new("powershell")
         .args([
             "-NoProfile",

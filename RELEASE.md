@@ -1,5 +1,9 @@
 # Stockly — Não lançado
 
+## Correções
+
+- **Correção:** Abrir a tela de Configurações travava o app por alguns instantes (nenhum clique respondia) enquanto a lista de impressoras era carregada.
+
 # Stockly — v0.0.4
 
 ## Novidades
