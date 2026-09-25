@@ -1,6 +1,6 @@
 [package]
 name = "stockly-app"
-version = "0.0.3"
+version = "0.0.4"
 description = "Bora Vender"
 authors = ["welbert"]
 edition = "2021"

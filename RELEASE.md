@@ -1,5 +1,7 @@
 # Stockly — Não lançado
 
+# Stockly — v0.0.4
+
 ## Novidades
 
 - **Novidade:** A tela de Devedores agora é a tela de Clientes — lista todos os clientes cadastrados, não só quem está devendo, e um filtro mostra só quem tem saldo em aberto quando precisar.
