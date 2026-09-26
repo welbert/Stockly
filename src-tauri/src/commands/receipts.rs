@@ -10,8 +10,13 @@ use chrono::{Local, NaiveDateTime, TimeZone, Utc};
 use genpdf::{elements, style, Alignment, Document, Element};
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
+use std::os::windows::process::CommandExt;
 use std::process::Command;
 use tauri::{Manager, State};
+
+/// `CREATE_NO_WINDOW` (Win32) — see `list_printers`'s doc comment for why
+/// this flag matters specifically for that command.
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 const RECEIPTS_FOLDER_KEY: &str = "receipts_folder";
 
@@ -239,6 +244,18 @@ pub fn print_file(app: tauri::AppHandle, state: State<AppState>, path: String) -
 /// (WMI, via `Get-CimInstance`) rather than the newer `Get-Printer` cmdlet —
 /// WMI is always available on Windows, `Get-Printer` needs the
 /// PrintManagement module present.
+///
+/// `CREATE_NO_WINDOW` is required here, not optional: `powershell.exe` is a
+/// console app, and this app's own process has **no console** in a release
+/// build (`main.rs`'s `windows_subsystem = "windows"`, only active when
+/// `debug_assertions` is off — i.e. exactly `tauri build`, never `tauri
+/// dev`). Spawning a console app from a console-less process makes Windows
+/// allocate a brand-new console for the child, which on Windows 11 goes
+/// through whatever is set as the "default terminal application" — if
+/// that's Windows Terminal, allocating one can hang for a long time (a
+/// known Win32/Rust `Command::spawn` gotcha, unrelated to the DB-mutex bug
+/// fixed alongside this). `CREATE_NO_WINDOW` skips console allocation
+/// entirely, so the child just runs headless with its pipes.
 #[tauri::command]
 pub fn list_printers(state: State<AppState>) -> Result<Vec<String>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
@@ -251,6 +268,7 @@ pub fn list_printers(state: State<AppState>) -> Result<Vec<String>, String> {
             "-Command",
             "Get-CimInstance -ClassName Win32_Printer | Select-Object -ExpandProperty Name",
         ])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| e.to_string())?;
     if !output.status.success() {
