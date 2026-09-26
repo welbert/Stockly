@@ -846,6 +846,11 @@ export function setCreditEnabled(enabled: boolean) {
   return call<void>("set_credit_enabled", { enabled });
 }
 
+/** UTC `datetime('now')`-shaped build timestamp — format with `fmtDateTime()`. */
+export function getBuildTime() {
+  return call<string>("get_build_time");
+}
+
 /** Width (1st number, in columns of `GRID_COLS`) × height (2nd number, in
  * rows of `ROW_HEIGHT`) — see `SIZE_DIMENSIONS` in `dashboard-cards/catalog.ts`. */
 export type CardSize =

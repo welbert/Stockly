@@ -20,6 +20,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# Only for the build timestamp embedded in `build.rs`.
+chrono = "0.4"
 
 [dependencies]
 tauri = { version = "2", features = [] }

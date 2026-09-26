@@ -77,6 +77,7 @@ Every mutation that isn't self-service (`update_theme`, `update_my_auto_lock`, `
 | `set_credit_enabled` | `(enabled) -> ()` | admin-only. Refuses to set `false` while any client still has an open Crediário balance (`commands::clients::has_open_debtors`) |
 | `get_printer_name` | `() -> String` | admin-only both ways, matching `get_receipts_folder`/`set_receipts_folder`. Empty (the default) means "usa a impressora padrão do Windows" |
 | `set_printer_name` | `(name) -> ()` | admin-only. `name` is expected to be one of `list_printers`' own results, but not validated against it server-side — an unknown/removed printer name just falls through to `commands::receipts::print_file`'s `-print-to`, which SumatraPDF itself rejects at print time |
+| `get_build_time` | `() -> String` | any logged-in profile, no `State`/DB access — returns `crate::BUILD_TIME`, a compile-time constant embedded by `build.rs` (UTC, `datetime('now')`-shaped so the frontend formats it with `fmtDateTime()`). Shown next to "Versão atual" in Configurações' "Sistema" card, since the semver alone doesn't change between builds of the same version |
 
 ## Sales (`commands/sales.rs`)
 

@@ -242,3 +242,11 @@ pub fn set_credit_enabled(state: State<AppState>, enabled: bool) -> Result<(), S
     }
     set_config_string(&conn, CREDIT_ENABLED_KEY, if enabled { "1" } else { "0" })
 }
+
+/// No `State`/DB access — the build timestamp is a compile-time constant
+/// (`crate::BUILD_TIME`, from `build.rs`), same "harmless technical info,
+/// no session gate needed" reasoning as `commands::logging::write_log`.
+#[tauri::command]
+pub fn get_build_time() -> String {
+    crate::BUILD_TIME.to_string()
+}

@@ -7,6 +7,7 @@ import {
   clearReceiptsFolder,
   effectiveAutoLockMinutes,
   getBackupFolder,
+  getBuildTime,
   getCreditEnabled,
   getDefaultProfitMargin,
   getItemCodePadLength,
@@ -39,7 +40,7 @@ import { RestoreBackupModal } from "../components/RestoreBackupModal";
 import { ThemeSwitcher } from "../components/ThemeSwitcher";
 import { useToast } from "../context/ToastContext";
 import { useUpdater } from "../context/UpdaterContext";
-import { normalize } from "../lib/format";
+import { fmtDateTime, normalize } from "../lib/format";
 import { logger } from "../logger";
 
 const AUTO_LOCK_OPTIONS: { value: number; label: string }[] = [
@@ -126,7 +127,7 @@ const GROUPS: GroupMeta[] = [
     adminOnly: false,
     fields: {
       logDir: ["Pasta de logs"],
-      updates: ["Atualizações", "Verificar atualizações", "Versão atual"],
+      updates: ["Atualizações", "Verificar atualizações", "Versão atual", "Build"],
     },
   },
 ];
@@ -144,6 +145,7 @@ export function SettingsPage() {
   const { showToast } = useToast();
   const { currentVersion, checkNow } = useUpdater();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [buildTime, setBuildTime] = useState<string | null>(null);
   const [lowStockPercent, setLowStockPercentState] = useState<number | null>(null);
   const [profitMargin, setProfitMarginState] = useState<number | null>(null);
   const [itemCodePadLength, setItemCodePadLengthState] = useState<number | null>(null);
@@ -158,6 +160,12 @@ export function SettingsPage() {
   const [printers, setPrinters] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(["perfil"]));
+
+  useEffect(() => {
+    getBuildTime()
+      .then(setBuildTime)
+      .catch((err) => logger.error("falha ao ler data/hora do build", err));
+  }, []);
 
   useEffect(() => {
     if (user?.isAdmin) {
@@ -726,6 +734,7 @@ export function SettingsPage() {
           <Field visible={fieldVisible(sistemaMeta, "updates")}>
             <label className="mb-1.5 block text-xs font-semibold text-theme-3">Atualizações</label>
             <p className="text-xs text-theme-3">Versão atual: {currentVersion ? `v${currentVersion}` : "—"}</p>
+            <p className="text-xs text-theme-3">Build: {buildTime ? fmtDateTime(buildTime) : "—"}</p>
             <Button variant="secondary" className="mt-2" onClick={handleCheckUpdate} disabled={checkingUpdate}>
               {checkingUpdate ? "Verificando…" : "Verificar atualizações"}
             </Button>

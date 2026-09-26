@@ -21,6 +21,13 @@ pub struct AppState {
     pub active_user_id: Mutex<Option<i64>>,
 }
 
+/// Build timestamp (generated in `build.rs`), exposed to the frontend via
+/// `commands::config::get_build_time` — the app's own semver
+/// (`tauri.conf.json`, read via `getVersion()`) doesn't change between builds
+/// of the same version, so this is what pins down exactly which build is
+/// running.
+pub(crate) const BUILD_TIME: &str = env!("STOCKLY_BUILD_TIME");
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -135,6 +142,7 @@ pub fn run() {
             commands::audit::list_admin_authorizations,
             commands::config::get_credit_enabled,
             commands::config::set_credit_enabled,
+            commands::config::get_build_time,
             commands::dashboard_layout::get_dashboard_layout,
             commands::dashboard_layout::save_dashboard_layout,
             commands::dashboard::get_dashboard_data,
