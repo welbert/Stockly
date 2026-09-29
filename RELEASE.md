@@ -2,10 +2,6 @@
 
 # Stockly — v0.0.5
 
-## Novidades
-
-- **Novidade:** Em Configurações → Sistema, agora mostra a data e hora exatas de quando o app foi compilado, junto com a versão.
-
 ## Correções
 
 - **Correção:** Abrir a tela de Configurações travava o app por alguns instantes (nenhum clique respondia) enquanto a lista de impressoras era carregada.
