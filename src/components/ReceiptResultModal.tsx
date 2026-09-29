@@ -38,6 +38,7 @@ export function ReceiptResultModal({ sale, storeName, storeInfo, thankYouMessage
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
+        if (busy) return;
         onNewSale();
       } else if (e.key === "Enter") {
         e.stopPropagation();

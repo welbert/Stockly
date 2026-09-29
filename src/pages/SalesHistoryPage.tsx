@@ -3,6 +3,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { useAuth } from "../context/AuthContext";
 import type { SaleListItem, UserSummary } from "../lib/api";
 import { exportSalesCsv, listAdmins, listSales, openContainingFolder, openReceiptFile, printFile, regenerateReceiptPdf, toSaleCsvRows } from "../lib/api";
+import { BusyModal } from "../components/BusyModal";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { ContextMenu, ContextMenuItem } from "../components/ContextMenu";
@@ -28,28 +29,38 @@ export function SalesHistoryPage() {
   const [actionMenu, setActionMenu] = useState<{ x: number; y: number; actions: ContextMenuItem[] } | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[1]);
+  // Set while a receipt is being generated/sent to the printer — drives the blocking "Aguarde" overlay.
+  const [busyMessage, setBusyMessage] = useState<string | null>(null);
 
   // Both actions regenerate the PDF fresh rather than trusting a path we
   // might have cached — same reasoning as `ReceiptResultModal`'s `ensurePdf`:
   // the file is cheap to re-render and may not exist yet (creation failed
   // right after the sale, or the "recibos" folder was cleared).
   async function handlePrintReceipt(sale: SaleListItem) {
+    if (busyMessage) return;
+    setBusyMessage("Imprimindo recibo…");
     try {
       const path = await regenerateReceiptPdf(sale.id);
       await printFile(path);
     } catch (err) {
       logger.error("falha ao imprimir recibo", sale.id, err);
       showToast({ type: "error", title: "Não foi possível imprimir o recibo" });
+    } finally {
+      setBusyMessage(null);
     }
   }
 
   async function handleOpenReceiptPdf(sale: SaleListItem) {
+    if (busyMessage) return;
+    setBusyMessage("Abrindo PDF do recibo…");
     try {
       const path = await regenerateReceiptPdf(sale.id);
       await openReceiptFile(path);
     } catch (err) {
       logger.error("falha ao abrir PDF do recibo", sale.id, err);
       showToast({ type: "error", title: "Não foi possível abrir o PDF do recibo" });
+    } finally {
+      setBusyMessage(null);
     }
   }
 
@@ -271,6 +282,8 @@ export function SalesHistoryPage() {
           onCancelled={reloadList}
         />
       )}
+
+      {busyMessage && <BusyModal message={busyMessage} />}
 
       {actionMenu && (
         <ContextMenu x={actionMenu.x} y={actionMenu.y} items={actionMenu.actions} onClose={() => setActionMenu(null)} />

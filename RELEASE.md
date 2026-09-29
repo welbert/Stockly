@@ -1,5 +1,7 @@
 # Stockly — Não lançado
 
+# Stockly — v0.0.5
+
 ## Novidades
 
 - **Novidade:** Em Configurações → Sistema, agora mostra a data e hora exatas de quando o app foi compilado, junto com a versão.
@@ -7,6 +9,8 @@
 ## Correções
 
 - **Correção:** Abrir a tela de Configurações travava o app por alguns instantes (nenhum clique respondia) enquanto a lista de impressoras era carregada.
+- **Correção:** O recibo impresso saía "deitado" e, em vendas pequenas, a última linha ("Não possui valor de documento fiscal") ia para uma segunda folha. Agora o recibo sai em pé e completo, em uma folha só.
+- **Correção:** Ao imprimir ou abrir o recibo pelo histórico de vendas, agora aparece uma tela de "Aguarde" enquanto o recibo é preparado, evitando cliques repetidos e impressões duplicadas.
 
 # Stockly — v0.0.4
 

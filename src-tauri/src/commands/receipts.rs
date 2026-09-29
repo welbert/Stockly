@@ -115,12 +115,23 @@ pub(crate) fn render_receipt_pdf(conn: &Connection, sale_id: i64, dir: &Path) ->
     let store_info_lines: Vec<String> =
         config_string(conn, STORE_INFO_KEY)?.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect();
 
-    let item_lines = sale.items.len() as f64;
-    let height_mm = 46.0
-        + item_lines * 9.0
-        + store_info_lines.len() as f64 * 4.0
-        + if sale.client_name.is_some() { 5.0 } else { 0.0 }
-        + if sale.credit_paid.is_some() { 10.0 } else { 0.0 };
+    // The paper height must fit every rendered line: genpdf paginates when
+    // content overflows, so an underestimate pushes the last line(s) onto a
+    // second page. Count lines instead of guessing per-block millimetres;
+    // 8pt Courier Prime lays out at ~3.05mm/line, 3.3 leaves a small margin.
+    let mut lines = 15.0 // fixed rows: header, separators, recibo/data/operador, totals, payment, footer
+        + store_info_lines.len() as f64
+        + sale.items.len() as f64 * 2.0
+        + if sale.client_name.is_some() { 1.0 } else { 0.0 }
+        + if sale.discount_amount.is_some() { 1.0 } else { 0.0 }
+        + if sale.credit_paid.is_some() { 2.0 } else { 0.0 };
+    // Item names longer than one line wrap (~40 chars at 8pt on 72mm of usable width).
+    for item in &sale.items {
+        lines += (item.item_name.chars().count().saturating_sub(1) / 40) as f64;
+    }
+    // Floor of 100mm keeps the page taller than wide (80mm) for every receipt, so it
+    // is always portrait-shaped and prints upright regardless of item count.
+    let height_mm = (8.0 + lines * 3.3).max(100.0);
     doc.set_paper_size((80, height_mm));
 
     doc.push(elements::Paragraph::new(store_name).aligned(Alignment::Center).styled(style::Style::new().bold()));
