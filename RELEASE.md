@@ -1,5 +1,9 @@
 # Stockly — Não lançado
 
+## Correções
+
+- **Correção:** Recibos de vendas com poucos itens saíam com um espaço em branco no final, gastando papel à toa. Agora o recibo tem só o tamanho do conteúdo e continua saindo em pé.
+
 # Stockly — v0.0.5
 
 ## Correções

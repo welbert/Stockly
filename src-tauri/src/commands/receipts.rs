@@ -129,9 +129,10 @@ pub(crate) fn render_receipt_pdf(conn: &Connection, sale_id: i64, dir: &Path) ->
     for item in &sale.items {
         lines += (item.item_name.chars().count().saturating_sub(1) / 40) as f64;
     }
-    // Floor of 100mm keeps the page taller than wide (80mm) for every receipt, so it
-    // is always portrait-shaped and prints upright regardless of item count.
-    let height_mm = (8.0 + lines * 3.3).max(100.0);
+    // No minimum height: a short receipt ends up wider than tall (e.g. 80x60mm), which
+    // SumatraPDF would auto-rotate sideways — `print_file` disables that rotation instead
+    // of padding the page with blank paper.
+    let height_mm = 8.0 + lines * 3.3;
     doc.set_paper_size((80, height_mm));
 
     doc.push(elements::Paragraph::new(store_name).aligned(Alignment::Center).styled(style::Style::new().bold()));
@@ -228,6 +229,9 @@ pub fn regenerate_receipt_pdf(state: State<AppState>, sale_id: i64) -> Result<St
 /// driver's own default/last-used orientation — both receipts (80mm-wide
 /// roll) and reports (A4, `pdf_util.rs`) are always authored portrait, so
 /// this is safe to hardcode rather than derive per document.
+/// `disable-auto-rotation` is needed on top of that: `portrait` only sets the
+/// paper orientation, while SumatraPDF still rotates by 90° any *page* that is
+/// wider than tall — which a short receipt (80mm wide, few items) is.
 #[tauri::command]
 pub fn print_file(app: tauri::AppHandle, state: State<AppState>, path: String) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
@@ -244,7 +248,7 @@ pub fn print_file(app: tauri::AppHandle, state: State<AppState>, path: String) -
     } else {
         cmd.args(["-print-to", &printer_name]);
     }
-    cmd.args(["-print-settings", "portrait", "-silent", &path]);
+    cmd.args(["-print-settings", "portrait,disable-auto-rotation", "-silent", &path]);
     cmd.spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
