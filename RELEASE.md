@@ -1,5 +1,9 @@
 # Stockly — Não lançado
 
+## Novidades
+
+- **Novidade:** No cadastro de item, a categoria agora é um campo de busca: é só digitar para filtrar e escolher. Em "Gerenciar", a lista completa continua disponível, agora com um campo para filtrar e um botão "Selecionar" para escolher a categoria direto dali.
+
 ## Correções
 
 - **Correção:** Recibos de vendas com poucos itens saíam com um espaço em branco no final, gastando papel à toa. Agora o recibo tem só o tamanho do conteúdo e continua saindo em pé.

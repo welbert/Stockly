@@ -4,16 +4,21 @@ import { createCategory, deleteCategory, listCategories, renameCategory } from "
 import { Button } from "./Button";
 import { ContextMenu, ContextMenuItem } from "./ContextMenu";
 import { Modal } from "./Modal";
+import { normalize } from "../lib/format";
 import { logger } from "../logger";
 
 interface CategoryManagerModalProps {
+  /** When present, each row gets a "Selecionar" button that returns the chosen category. */
+  onSelect?: (id: number) => void;
+  selectedId?: number | null;
   onChanged: () => void;
   onClose: () => void;
 }
 
 /** CRUD de categorias — exclusivo do Administrador. */
-export function CategoryManagerModal({ onChanged, onClose }: CategoryManagerModalProps) {
+export function CategoryManagerModal({ onSelect, selectedId, onChanged, onClose }: CategoryManagerModalProps) {
   const [categories, setCategories] = useState<CategorySummary[]>([]);
+  const [filter, setFilter] = useState("");
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -64,6 +69,8 @@ export function CategoryManagerModal({ onChanged, onClose }: CategoryManagerModa
     }
   }
 
+  const visible = categories.filter((c) => normalize(c.name).includes(normalize(filter.trim())));
+
   function categoryActions(c: CategorySummary): ContextMenuItem[] {
     if (editingId === c.id) {
       return [
@@ -100,8 +107,15 @@ export function CategoryManagerModal({ onChanged, onClose }: CategoryManagerModa
 
       {error && <p className="mb-2 text-xs text-danger">{error}</p>}
 
+      <input
+        placeholder="Filtrar categorias"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        className="mb-2 w-full rounded-lg border border-theme-border bg-theme-bg px-3 py-2 text-sm text-theme-1 outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+      />
+
       <ul className="flex max-h-64 flex-col gap-1 overflow-auto">
-        {categories.map((c) => (
+        {visible.map((c) => (
           <li
             key={c.id}
             className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-theme-hover"
@@ -127,7 +141,15 @@ export function CategoryManagerModal({ onChanged, onClose }: CategoryManagerModa
               </>
             ) : (
               <>
-                <span className="flex-1 text-sm text-theme-1">{c.name}</span>
+                <span className="flex-1 text-sm text-theme-1">
+                  {c.name}
+                  {c.id === selectedId && <span className="ml-2 text-xs text-theme-3">(selecionada)</span>}
+                </span>
+                {onSelect && (
+                  <Button variant="ghost" className="text-primary" onClick={() => onSelect(c.id)}>
+                    Selecionar
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   onClick={() => {
@@ -144,7 +166,11 @@ export function CategoryManagerModal({ onChanged, onClose }: CategoryManagerModa
             )}
           </li>
         ))}
-        {categories.length === 0 && <li className="px-2 py-1.5 text-sm text-theme-3">Nenhuma categoria cadastrada.</li>}
+        {visible.length === 0 && (
+          <li className="px-2 py-1.5 text-sm text-theme-3">
+            {categories.length === 0 ? "Nenhuma categoria cadastrada." : "Nenhuma categoria encontrada."}
+          </li>
+        )}
       </ul>
 
       {contextMenu && (

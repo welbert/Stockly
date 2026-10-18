@@ -2,6 +2,7 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 import type { CategorySummary, ItemSummary } from "../lib/api";
 import { createItem, getDefaultProfitMargin, listCategories, suggestedSalePrice, updateItem } from "../lib/api";
 import { Button } from "./Button";
+import { CategoryCombobox } from "./CategoryCombobox";
 import { CategoryManagerModal } from "./CategoryManagerModal";
 import { Checkbox } from "./Checkbox";
 import { ConfirmModal } from "./ConfirmModal";
@@ -132,18 +133,7 @@ export function ItemFormModal({ initial, onSaved, onClose }: ItemFormModalProps)
 
           <Field label="Categoria">
             <div className="flex gap-2">
-              <select
-                value={categoryId ?? ""}
-                onChange={(e) => setCategoryId(e.target.value === "" ? null : Number(e.target.value))}
-                className={inputClass}
-              >
-                <option value="">Categoria indefinida</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              <CategoryCombobox categories={categories} value={categoryId} onChange={setCategoryId} />
               <Button type="button" variant="ghost" onClick={() => setManagingCategories(true)}>
                 Gerenciar
               </Button>
@@ -216,7 +206,15 @@ export function ItemFormModal({ initial, onSaved, onClose }: ItemFormModalProps)
       </Modal>
 
       {managingCategories && (
-        <CategoryManagerModal onChanged={reloadCategories} onClose={() => setManagingCategories(false)} />
+        <CategoryManagerModal
+          selectedId={categoryId}
+          onSelect={(id) => {
+            setCategoryId(id);
+            setManagingCategories(false);
+          }}
+          onChanged={reloadCategories}
+          onClose={() => setManagingCategories(false)}
+        />
       )}
 
       {confirmDiscard && (
