@@ -1,5 +1,7 @@
 # Stockly — Não lançado
 
+# Stockly — v0.0.6
+
 ## Novidades
 
 - **Novidade:** No cadastro de item, a categoria agora é um campo de busca: é só digitar para filtrar e escolher. Em "Gerenciar", a lista completa continua disponível, agora com um campo para filtrar e um botão "Selecionar" para escolher a categoria direto dali.
